@@ -48,7 +48,10 @@ import {
   Bookmark,
   Globe,
   UploadCloud,
-  ExternalLink
+  ExternalLink,
+  PanelRight,
+  PanelRightClose,
+  Star
 } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import {
@@ -90,6 +93,9 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
     toggleTypewriterMode,
     isParagraphFocusMode,
     toggleParagraphFocusMode,
+    isInspectorOpen,
+    toggleInspector,
+    toggleFavorite,
   } = useWorkspace();
 
   const effectivePageId = pageId || contextActivePageId;
@@ -1122,15 +1128,29 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
         >
           {/* Document Title Header */}
           <div className="mb-6 group/title">
-            <input
-              type="text"
-              value={title}
-              onChange={e => handleTitleChange(e.target.value)}
-              placeholder="Untitled Page"
-              className={`w-full text-3xl sm:text-4xl font-bold tracking-tight bg-transparent border-none outline-none text-slate-900 dark:text-slate-50 placeholder:text-slate-300 dark:placeholder:text-slate-700 ${
-                typography === 'serif' ? 'font-serif' : 'font-sans'
-              }`}
-            />
+            <div className="flex items-start justify-between gap-3">
+              <input
+                type="text"
+                value={title}
+                onChange={e => handleTitleChange(e.target.value)}
+                placeholder="Untitled Page"
+                className={`w-full text-3xl sm:text-4xl font-bold tracking-tight bg-transparent border-none outline-none text-slate-900 dark:text-slate-50 placeholder:text-slate-300 dark:placeholder:text-slate-700 ${
+                  typography === 'serif' ? 'font-serif' : 'font-sans'
+                }`}
+              />
+              {currentPage && (
+                <button
+                  type="button"
+                  onClick={() => toggleFavorite(currentPage.id, 'page')}
+                  className={`p-1.5 transition-colors rounded-none opacity-0 group-hover/title:opacity-100 ${
+                    currentPage.isFavorite ? '!opacity-100 text-amber-500' : 'text-slate-300 dark:text-slate-600 hover:text-amber-500'
+                  }`}
+                  title={currentPage.isFavorite ? "Remove from Favorites" : "Add to Favorites"}
+                >
+                  <Star className={`w-5 h-5 ${currentPage.isFavorite ? 'fill-amber-500' : ''}`} />
+                </button>
+              )}
+            </div>
             {/* Meta Row: Word count & reading time */}
             <div className="flex items-center gap-4 mt-2 text-xs text-slate-400 select-none">
               <span className="flex items-center gap-1">
@@ -1191,6 +1211,21 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
                 >
                   <Maximize2 className="w-3 h-3" />
                   <span className="hidden sm:inline">Zen Focus</span>
+                </button>
+
+                {/* Inspector Drawer Toggle */}
+                <button
+                  type="button"
+                  onClick={toggleInspector}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-none border text-[11px] transition-colors ${
+                    isInspectorOpen
+                      ? 'border-[#0284c7] text-[#0284c7] bg-[#0284c7]/10 font-medium'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                  }`}
+                  title="Document Inspector (Outline & Backlinks) • Ctrl+Shift+O"
+                >
+                  <PanelRight className="w-3 h-3" />
+                  <span className="hidden sm:inline">Inspector</span>
                 </button>
 
                 {/* Dynamic Width Toggle */}
@@ -2046,9 +2081,22 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
         </div>
       </main>
 
-      {/* Right Drawer: Table of Contents Outline, Backlinks & Note Connections */}
-      {!isZenMode && !isSecondaryPane && (
-        <aside className="w-64 border-l border-slate-200/80 dark:border-slate-800 bg-white/60 dark:bg-[#070b14]/60 backdrop-blur-md hidden xl:flex flex-col text-xs select-none">
+      {/* Right Drawer: Collapsible Table of Contents Outline, Backlinks & Note Connections */}
+      {!isZenMode && !isSecondaryPane && isInspectorOpen && (
+        <aside className="w-72 border-l border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-[#070b14]/70 backdrop-blur-md flex flex-col text-xs select-none z-10 transition-all duration-200">
+          {/* Inspector Header */}
+          <div className="h-10 px-3 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-[#0b1120]/50">
+            <span className="font-semibold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[10px]">
+              Document Inspector
+            </span>
+            <button
+              onClick={toggleInspector}
+              className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 rounded-none transition-colors"
+              title="Close Inspector (Ctrl+Shift+O)"
+            >
+              <PanelRightClose className="w-3.5 h-3.5" />
+            </button>
+          </div>
           {/* Outline Section */}
         <div className="border-b border-slate-200/80 dark:border-slate-800">
           <div

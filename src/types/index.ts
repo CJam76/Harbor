@@ -60,6 +60,7 @@ export interface Database {
   updatedAt: number;
   isDeleted?: boolean;
   deletedAt?: number;
+  isFavorite?: boolean;
 }
 
 export interface Page {
@@ -80,6 +81,7 @@ export interface Page {
   isArchived?: boolean;
   isDeleted?: boolean;
   deletedAt?: number;
+  isFavorite?: boolean;
 }
 
 export interface PageRevision {

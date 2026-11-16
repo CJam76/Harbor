@@ -42,7 +42,10 @@ interface WorkspaceContextType {
   editorMode: EditorMode;
   setEditorMode: (mode: EditorMode) => void;
   isSidebarOpen: boolean;
-  setSidebarOpen: (open: boolean) => void;
+  setSidebarOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
+  isInspectorOpen: boolean;
+  setIsInspectorOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
+  toggleInspector: () => void;
   isZenMode: boolean;
   setIsZenMode: (zen: boolean | ((prev: boolean) => boolean)) => void;
   toggleZenMode: () => void;
@@ -50,6 +53,7 @@ interface WorkspaceContextType {
   toggleTypewriterMode: () => void;
   isParagraphFocusMode: boolean;
   toggleParagraphFocusMode: () => void;
+  toggleFavorite: (id: string, type?: 'page' | 'database') => Promise<void>;
 
   // Status
   saveStatus: SaveStatus;
@@ -168,7 +172,37 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Search & UI
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState(false);
-  const [isSidebarOpen, setSidebarOpen] = useState(true);
+  const [isSidebarOpen, setSidebarOpenRaw] = useState<boolean>(() => {
+    const saved = localStorage.getItem('harbor_sidebar_open');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const setSidebarOpen = useCallback((open: boolean | ((prev: boolean) => boolean)) => {
+    setSidebarOpenRaw(prev => {
+      const next = typeof open === 'function' ? open(prev) : open;
+      localStorage.setItem('harbor_sidebar_open', String(next));
+      return next;
+    });
+  }, []);
+
+  const [isInspectorOpen, setIsInspectorOpenRaw] = useState<boolean>(() => {
+    const saved = localStorage.getItem('harbor_inspector_open');
+    return saved !== null ? saved === 'true' : false; // Closed by default for clean writing
+  });
+  const setIsInspectorOpen = useCallback((open: boolean | ((prev: boolean) => boolean)) => {
+    setIsInspectorOpenRaw(prev => {
+      const next = typeof open === 'function' ? open(prev) : open;
+      localStorage.setItem('harbor_inspector_open', String(next));
+      return next;
+    });
+  }, []);
+  const toggleInspector = useCallback(() => {
+    setIsInspectorOpenRaw(prev => {
+      const next = !prev;
+      localStorage.setItem('harbor_inspector_open', String(next));
+      return next;
+    });
+  }, []);
+
   const [editorMode, setEditorMode] = useState<EditorMode>('rich');
   const [isZenMode, setIsZenMode] = useState<boolean>(false);
   const [isTypewriterMode, setIsTypewriterMode] = useState<boolean>(() => {
@@ -1044,6 +1078,22 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setDatabases(prev => prev.filter(d => !d.isDeleted));
   }, []);
 
+  const toggleFavorite = useCallback(async (id: string, type: 'page' | 'database' = 'page') => {
+    if (type === 'page') {
+      const p = pages.find(item => item.id === id);
+      if (!p) return;
+      const updated: Page = { ...p, isFavorite: !p.isFavorite, updatedAt: Date.now() };
+      await storage.savePage(updated);
+      setPages(prev => prev.map(item => item.id === id ? updated : item));
+    } else {
+      const d = databases.find(item => item.id === id);
+      if (!d) return;
+      const updated: Database = { ...d, isFavorite: !d.isFavorite, updatedAt: Date.now() };
+      await storage.saveDatabase(updated);
+      setDatabases(prev => prev.map(item => item.id === id ? updated : item));
+    }
+  }, [pages, databases]);
+
   // Database Row Operations (Rows are Pages with isDatabaseRow: true)
   const createDatabaseRow = useCallback(async (
     databaseId: string,
@@ -1348,6 +1398,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setEditorMode,
         isSidebarOpen,
         setSidebarOpen,
+        isInspectorOpen,
+        setIsInspectorOpen,
+        toggleInspector,
+        toggleFavorite,
         isZenMode,
         setIsZenMode,
         toggleZenMode,

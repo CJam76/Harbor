@@ -13,7 +13,7 @@ import { NewSpaceModal } from './components/modals/NewSpaceModal';
 import { NewDatabaseModal } from './components/modals/NewDatabaseModal';
 import { QuickCaptureModal } from './components/modals/QuickCaptureModal';
 import { TrashModal } from './components/modals/TrashModal';
-import { Loader2, X } from 'lucide-react';
+import { Loader2, X, PanelLeft } from 'lucide-react';
 
 const WorkspaceShell: React.FC = () => {
   const {
@@ -23,6 +23,9 @@ const WorkspaceShell: React.FC = () => {
     activeDatabaseId,
     isLoading,
     isSidebarOpen,
+    setSidebarOpen,
+    isInspectorOpen,
+    toggleInspector,
     isQuickCaptureOpen,
     setIsQuickCaptureOpen,
     openDailyNote,
@@ -96,6 +99,16 @@ const WorkspaceShell: React.FC = () => {
         e.preventDefault();
         toggleTypewriterMode();
       }
+      // Ctrl+B: Toggle Navigation Sidebar
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setSidebarOpen(prev => !prev);
+      }
+      // Ctrl+Shift+O: Toggle Document Inspector
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'o') {
+        e.preventDefault();
+        toggleInspector();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -113,6 +126,8 @@ const WorkspaceShell: React.FC = () => {
     toggleZenMode,
     setIsZenMode,
     toggleTypewriterMode,
+    setSidebarOpen,
+    toggleInspector,
   ]);
 
   // Desktop Electron global hotkey bridge listener
@@ -186,6 +201,20 @@ const WorkspaceShell: React.FC = () => {
           onOpenNewSpaceModal={() => setNewSpaceModalOpen(true)}
           onOpenNewDbModal={spaceId => setNewDbModalState({ open: true, spaceId })}
         />
+      )}
+
+      {/* Floating Edge Expand Button when Sidebar is Collapsed */}
+      {!isSidebarOpen && !isZenMode && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="fixed left-0 top-14 z-30 flex items-center gap-1.5 pl-2 pr-2.5 py-1.5 bg-white/95 dark:bg-[#0b1120]/95 border border-l-0 border-slate-200/90 dark:border-slate-800 shadow-md text-slate-500 hover:text-[#0284c7] dark:hover:text-[#38bdf8] hover:bg-slate-50 dark:hover:bg-slate-800 rounded-none transition-all group backdrop-blur-xs select-none"
+          title="Expand sidebar (Ctrl+B)"
+        >
+          <PanelLeft className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+          <span className="text-[10px] font-mono tracking-tight hidden group-hover:inline">
+            Sidebar (Ctrl+B)
+          </span>
+        </button>
       )}
 
       {/* Main Content Area */}

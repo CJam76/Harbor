@@ -19,7 +19,9 @@ import {
   FolderGit2,
   Share2,
   CalendarDays,
-  Zap
+  Zap,
+  Star,
+  PanelLeftClose
 } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { Page, Space, Database } from '../../types';
@@ -61,7 +63,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     resetToSampleData,
     setIsTrashOpen,
     trashCount,
+    toggleFavorite,
   } = useWorkspace();
+
+  // Favorites state
+  const [isFavoritesCollapsed, setIsFavoritesCollapsed] = useState(false);
+  const favoritePages = pages.filter(p => !p.isDeleted && p.isFavorite);
+  const favoriteDatabases = databases.filter(d => !d.isDeleted && d.isFavorite);
+  const hasFavorites = favoritePages.length > 0 || favoriteDatabases.length > 0;
 
   // Collapsed spaces tracking
   const [collapsedSpaces, setCollapsedSpaces] = useState<Record<string, boolean>>({});
@@ -327,12 +336,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
               Local
             </span>
           </div>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 rounded-none transition-colors"
+              title="Collapse sidebar (Ctrl+B)"
+            >
+              <PanelLeftClose className="w-4 h-4 hidden lg:block" />
+              <X className="w-4 h-4 lg:hidden" />
+            </button>
+          </div>
         </div>
 
         {/* Global Navigation: Home, Graph, Daily Notes, Quick Capture & Search */}
@@ -402,6 +415,95 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </kbd>
           </button>
         </div>
+
+        {/* Pinned / Starred Favorites Section */}
+        {hasFavorites && (
+          <div className="border-b border-slate-200/80 dark:border-slate-800 pb-2">
+            <div
+              onClick={() => setIsFavoritesCollapsed(!isFavoritesCollapsed)}
+              className="px-3 pt-3 pb-1 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+            >
+              <div className="flex items-center gap-1.5">
+                <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                <span>Favorites</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] font-mono text-slate-400">
+                  {favoritePages.length + favoriteDatabases.length}
+                </span>
+                {isFavoritesCollapsed ? (
+                  <ChevronRight className="w-3 h-3 text-slate-400" />
+                ) : (
+                  <ChevronDown className="w-3 h-3 text-slate-400" />
+                )}
+              </div>
+            </div>
+
+            {!isFavoritesCollapsed && (
+              <div className="px-1 space-y-0.5 mt-0.5">
+                {favoritePages.map(page => {
+                  const isActive = activePageId === page.id;
+                  return (
+                    <div
+                      key={page.id}
+                      onClick={() => navigateToPage(page.id)}
+                      className={`flex items-center justify-between px-3 py-1.5 text-xs cursor-pointer select-none transition-colors rounded-none group/fav ${
+                        isActive
+                          ? 'bg-[#0284c7]/10 dark:bg-[#0284c7]/20 text-[#0284c7] dark:text-[#38bdf8] font-medium border-l-2 border-l-[#0284c7]'
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 border-l-2 border-l-transparent'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                        <span className="truncate">{page.title || 'Untitled'}</span>
+                      </div>
+                      <button
+                        onClick={async e => {
+                          e.stopPropagation();
+                          await toggleFavorite(page.id, 'page');
+                        }}
+                        className="opacity-0 group-hover/fav:opacity-100 p-0.5 text-amber-500 hover:text-slate-400 transition-opacity"
+                        title="Remove from favorites"
+                      >
+                        <Star className="w-3 h-3 fill-amber-500" />
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {favoriteDatabases.map(db => {
+                  const isActive = activeDatabaseId === db.id;
+                  return (
+                    <div
+                      key={db.id}
+                      onClick={() => navigateToDatabase(db.id)}
+                      className={`flex items-center justify-between px-3 py-1.5 text-xs cursor-pointer select-none transition-colors rounded-none group/fav ${
+                        isActive
+                          ? 'bg-[#0284c7]/10 dark:bg-[#0284c7]/20 text-[#0284c7] dark:text-[#38bdf8] font-medium border-l-2 border-l-[#0284c7]'
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 border-l-2 border-l-transparent'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <DbIcon className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                        <span className="truncate">{db.title || 'Untitled Database'}</span>
+                      </div>
+                      <button
+                        onClick={async e => {
+                          e.stopPropagation();
+                          await toggleFavorite(db.id, 'database');
+                        }}
+                        className="opacity-0 group-hover/fav:opacity-100 p-0.5 text-amber-500 hover:text-slate-400 transition-opacity"
+                        title="Remove from favorites"
+                      >
+                        <Star className="w-3 h-3 fill-amber-500" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Spaces & Page Tree Header */}
         <div className="px-3 pt-4 pb-1.5 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
@@ -634,6 +736,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <Copy className="w-3.5 h-3.5 text-slate-400" />
                 <span>Duplicate Page</span>
               </button>
+              <button
+                onClick={() => toggleFavorite(contextMenu.id, 'page')}
+                className="w-full text-left px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"
+              >
+                <Star className={`w-3.5 h-3.5 ${contextMenu.item.isFavorite ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}`} />
+                <span>{contextMenu.item.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}</span>
+              </button>
               <div className="h-px bg-slate-200 dark:bg-slate-800 my-1" />
               <button
                 onClick={async () => {
@@ -663,6 +772,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <Edit2 className="w-3.5 h-3.5 text-slate-400" />
                 <span>Rename Database</span>
+              </button>
+              <button
+                onClick={() => toggleFavorite(contextMenu.id, 'database')}
+                className="w-full text-left px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"
+              >
+                <Star className={`w-3.5 h-3.5 ${contextMenu.item.isFavorite ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}`} />
+                <span>{contextMenu.item.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}</span>
               </button>
               <div className="h-px bg-slate-200 dark:bg-slate-800 my-1" />
               <button

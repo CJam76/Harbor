@@ -17,7 +17,10 @@ import {
   Anchor,
   Zap,
   CalendarDays,
-  Maximize
+  Maximize,
+  Star,
+  PanelRight,
+  PanelLeft
 } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
 
@@ -47,6 +50,9 @@ export const Header: React.FC<HeaderProps> = ({ onOpenExportModal }) => {
     setEditorMode,
     isSidebarOpen,
     setSidebarOpen,
+    isInspectorOpen,
+    toggleInspector,
+    toggleFavorite,
     saveStatus,
     setIsSearchOpen,
     openDailyNote,
@@ -88,8 +94,12 @@ export const Header: React.FC<HeaderProps> = ({ onOpenExportModal }) => {
       <div className="flex items-center gap-2 min-w-0">
         <button
           onClick={() => setSidebarOpen(!isSidebarOpen)}
-          className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-none transition-colors"
-          title={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+          className={`p-1.5 rounded-none transition-colors ${
+            isSidebarOpen
+              ? 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+              : 'text-[#0284c7] dark:text-[#38bdf8] bg-[#0284c7]/10'
+          }`}
+          title={isSidebarOpen ? "Collapse sidebar (Ctrl+B)" : "Expand sidebar (Ctrl+B)"}
           aria-label="Toggle sidebar"
         >
           <Menu className="w-4 h-4" />
@@ -137,6 +147,34 @@ export const Header: React.FC<HeaderProps> = ({ onOpenExportModal }) => {
             ))
           )}
         </nav>
+
+        {/* Favorite Star Toggle for Active Item */}
+        {currentPage && (
+          <button
+            onClick={() => toggleFavorite(currentPage.id, 'page')}
+            className={`p-1 rounded-none transition-colors ${
+              currentPage.isFavorite
+                ? 'text-amber-500 hover:text-amber-600'
+                : 'text-slate-300 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300'
+            }`}
+            title={currentPage.isFavorite ? "Remove from Favorites" : "Add to Favorites"}
+          >
+            <Star className={`w-3.5 h-3.5 ${currentPage.isFavorite ? 'fill-amber-500' : ''}`} />
+          </button>
+        )}
+        {currentDb && (
+          <button
+            onClick={() => toggleFavorite(currentDb.id, 'database')}
+            className={`p-1 rounded-none transition-colors ${
+              currentDb.isFavorite
+                ? 'text-amber-500 hover:text-amber-600'
+                : 'text-slate-300 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300'
+            }`}
+            title={currentDb.isFavorite ? "Remove from Favorites" : "Add to Favorites"}
+          >
+            <Star className={`w-3.5 h-3.5 ${currentDb.isFavorite ? 'fill-amber-500' : ''}`} />
+          </button>
+        )}
       </div>
 
       {/* Right controls: Editor modes, search, typography, theme, export */}
@@ -243,6 +281,22 @@ export const Header: React.FC<HeaderProps> = ({ onOpenExportModal }) => {
         >
           <Download className="w-3.5 h-3.5" />
         </button>
+
+        {/* Document Inspector Toggle (Outline, Backlinks, Graph) */}
+        {currentPage && (
+          <button
+            onClick={toggleInspector}
+            className={`p-1.5 rounded-none transition-colors ${
+              isInspectorOpen
+                ? 'bg-[#0284c7]/15 text-[#0284c7] dark:text-[#38bdf8] font-medium'
+                : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+            title={isInspectorOpen ? "Hide Inspector (Ctrl+Shift+O)" : "Open Inspector: Outline, Backlinks & Graph (Ctrl+Shift+O)"}
+            aria-label="Toggle Document Inspector"
+          >
+            <PanelRight className="w-3.5 h-3.5" />
+          </button>
+        )}
 
         {/* Zen Focus Mode Trigger */}
         <button
