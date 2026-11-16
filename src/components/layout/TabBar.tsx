@@ -9,7 +9,8 @@ import {
   Home,
   ChevronLeft,
   ChevronRight,
-  SplitSquareVertical
+  SplitSquareVertical,
+  LayoutGrid
 } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { WorkspaceTab } from '../../types';
@@ -54,6 +55,8 @@ export const TabBar: React.FC = () => {
         return <Network className="w-3.5 h-3.5 mr-1.5 text-emerald-500 shrink-0" />;
       case 'database':
         return <DatabaseIcon className="w-3.5 h-3.5 mr-1.5 text-amber-500 shrink-0" />;
+      case 'canvas':
+        return <LayoutGrid className="w-3.5 h-3.5 mr-1.5 text-purple-500 shrink-0" />;
       case 'page':
       default:
         return <FileText className="w-3.5 h-3.5 mr-1.5 text-[#0284c7] shrink-0" />;

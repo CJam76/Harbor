@@ -70,6 +70,7 @@ import {
 import katex from 'katex';
 import { RevisionHistoryModal } from '../modals/RevisionHistoryModal';
 import { CoverPickerModal } from '../modals/CoverPickerModal';
+import { LocalGraphMini } from '../graph/LocalGraphMini';
 
 export interface EditorProps {
   pageId?: string;
@@ -2300,6 +2301,9 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
           </div>
           {isLocalGraphOpen && (
             <div className="px-3 pb-3 space-y-3 flex-1 overflow-y-auto">
+              {/* Obsidian Local Graph Mini-Map */}
+              <LocalGraphMini pageId={currentPage.id} />
+
               {/* Outgoing links */}
               <div>
                 <div className="text-[10px] font-mono text-slate-400 uppercase mb-1">

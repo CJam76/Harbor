@@ -1,11 +1,12 @@
 import Dexie, { Table } from 'dexie';
-import { Database, Page, Space, WorkspaceBackup, DatabaseColumn, DatabaseView, PageRevision } from '../../types';
+import { Database, Page, Space, WorkspaceBackup, DatabaseColumn, DatabaseView, PageRevision, Canvas } from '../../types';
 
 export class HarborDexieDB extends Dexie {
   spaces!: Table<Space, string>;
   pages!: Table<Page, string>;
   databases!: Table<Database, string>;
   revisions!: Table<PageRevision, string>;
+  canvases!: Table<Canvas, string>;
 
   constructor() {
     super('harbor_workspace_db');
@@ -19,6 +20,13 @@ export class HarborDexieDB extends Dexie {
       pages: 'id, spaceId, parentId, title, isDatabaseRow, databaseId, order, updatedAt, isDeleted, deletedAt',
       databases: 'id, spaceId, title, createdAt, isDeleted, deletedAt',
       revisions: 'id, pageId, timestamp',
+    });
+    this.version(3).stores({
+      spaces: 'id, name, order, createdAt',
+      pages: 'id, spaceId, parentId, title, isDatabaseRow, databaseId, order, updatedAt, isDeleted, deletedAt',
+      databases: 'id, spaceId, title, createdAt, isDeleted, deletedAt',
+      revisions: 'id, pageId, timestamp',
+      canvases: 'id, spaceId, title, createdAt, updatedAt, isDeleted, deletedAt',
     });
   }
 }
@@ -43,6 +51,12 @@ export interface IStorageAdapter {
   deleteDatabase(id: string, soft?: boolean): Promise<void>;
   restoreDatabase(id: string): Promise<void>;
   permanentlyDeleteDatabase(id: string): Promise<void>;
+
+  // Canvas
+  getCanvases(spaceId?: string): Promise<Canvas[]>;
+  getCanvas(id: string): Promise<Canvas | undefined>;
+  saveCanvas(canvas: Canvas): Promise<void>;
+  deleteCanvas(id: string, soft?: boolean): Promise<void>;
 
   // Revision History
   saveRevision(revision: PageRevision): Promise<void>;
@@ -69,10 +83,11 @@ class DexieStorageAdapter implements IStorageAdapter {
   }
 
   async deleteSpace(id: string): Promise<void> {
-    await this.db.transaction('rw', [this.db.spaces, this.db.pages, this.db.databases], async () => {
+    await this.db.transaction('rw', [this.db.spaces, this.db.pages, this.db.databases, this.db.canvases], async () => {
       await this.db.spaces.delete(id);
       await this.db.pages.where('spaceId').equals(id).delete();
       await this.db.databases.where('spaceId').equals(id).delete();
+      await this.db.canvases.where('spaceId').equals(id).delete();
     });
   }
 
@@ -218,6 +233,33 @@ class DexieStorageAdapter implements IStorageAdapter {
     await this.deleteDatabase(id, false);
   }
 
+  async getCanvases(spaceId?: string): Promise<Canvas[]> {
+    const list = await this.db.canvases.toArray();
+    const filtered = spaceId ? list.filter(c => c.spaceId === spaceId) : list;
+    return filtered.sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  async getCanvas(id: string): Promise<Canvas | undefined> {
+    return await this.db.canvases.get(id);
+  }
+
+  async saveCanvas(canvas: Canvas): Promise<void> {
+    await this.db.canvases.put(canvas);
+  }
+
+  async deleteCanvas(id: string, soft = true): Promise<void> {
+    if (soft) {
+      const c = await this.db.canvases.get(id);
+      if (c) {
+        c.isDeleted = true;
+        c.deletedAt = Date.now();
+        await this.db.canvases.put(c);
+      }
+    } else {
+      await this.db.canvases.delete(id);
+    }
+  }
+
   async saveRevision(revision: PageRevision): Promise<void> {
     await this.db.revisions.put(revision);
     const count = await this.db.revisions.where('pageId').equals(revision.pageId).count();
@@ -261,13 +303,15 @@ class DexieStorageAdapter implements IStorageAdapter {
     const spaces = await this.getSpaces();
     const pages = await this.db.pages.toArray();
     const databases = await this.db.databases.toArray();
+    const canvases = await this.db.canvases.toArray();
 
     return {
       version: 1,
       exportedAt: new Date().toISOString(),
       spaces,
       pages,
-      databases
+      databases,
+      canvases,
     };
   }
 
@@ -276,24 +320,29 @@ class DexieStorageAdapter implements IStorageAdapter {
       throw new Error("Invalid workspace backup file structure");
     }
 
-    await this.db.transaction('rw', [this.db.spaces, this.db.pages, this.db.databases], async () => {
+    await this.db.transaction('rw', [this.db.spaces, this.db.pages, this.db.databases, this.db.canvases], async () => {
       await this.db.spaces.clear();
       await this.db.pages.clear();
       await this.db.databases.clear();
+      await this.db.canvases.clear();
 
       await this.db.spaces.bulkPut(backup.spaces);
       await this.db.pages.bulkPut(backup.pages);
       if (backup.databases?.length) {
         await this.db.databases.bulkPut(backup.databases);
       }
+      if (backup.canvases?.length) {
+        await this.db.canvases.bulkPut(backup.canvases);
+      }
     });
   }
 
   async clearWorkspace(): Promise<void> {
-    await this.db.transaction('rw', [this.db.spaces, this.db.pages, this.db.databases], async () => {
+    await this.db.transaction('rw', [this.db.spaces, this.db.pages, this.db.databases, this.db.canvases], async () => {
       await this.db.spaces.clear();
       await this.db.pages.clear();
       await this.db.databases.clear();
+      await this.db.canvases.clear();
     });
   }
 }

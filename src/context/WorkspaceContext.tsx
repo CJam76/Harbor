@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { Database, Page, Space, WorkspaceBackup, BacklinkInfo, DatabaseColumn, WorkspaceTab, TabType } from '../types';
+import { Database, Page, Space, WorkspaceBackup, BacklinkInfo, DatabaseColumn, WorkspaceTab, TabType, Canvas } from '../types';
 import { storage } from '../lib/storage';
 import { seedInitialDataIfNeeded } from '../lib/storage/seed';
 import { findBacklinks } from '../lib/markdown';
@@ -24,6 +24,7 @@ interface WorkspaceContextType {
   activeSpaceId: string | null;
   activePageId: string | null;
   activeDatabaseId: string | null;
+  activeCanvasId: string | null;
   isLandingPage: boolean;
   isGraphView: boolean;
   selectedRowPageId: string | null; // For database row slide-over / modal
@@ -32,6 +33,7 @@ interface WorkspaceContextType {
   spaces: Space[];
   pages: Page[];
   databases: Database[];
+  canvases: Canvas[];
   isLoading: boolean;
 
   // Preferences
@@ -53,7 +55,7 @@ interface WorkspaceContextType {
   toggleTypewriterMode: () => void;
   isParagraphFocusMode: boolean;
   toggleParagraphFocusMode: () => void;
-  toggleFavorite: (id: string, type?: 'page' | 'database') => Promise<void>;
+  toggleFavorite: (id: string, type?: 'page' | 'database' | 'canvas') => Promise<void>;
 
   // Status
   saveStatus: SaveStatus;
@@ -64,6 +66,7 @@ interface WorkspaceContextType {
   navigateToGraph: () => void;
   navigateToPage: (pageId: string) => void;
   navigateToDatabase: (databaseId: string) => void;
+  navigateToCanvas: (canvasId: string, inSplitPane?: boolean) => void;
   navigateToSpace: (spaceId: string) => void;
   openWikiLink: (targetTitle: string) => void;
   openRowModal: (rowId: string | null) => void;
@@ -90,6 +93,11 @@ interface WorkspaceContextType {
   restoreDatabase: (id: string) => Promise<void>;
   permanentlyDeleteDatabase: (id: string) => Promise<void>;
 
+  // Actions - Canvases
+  createCanvas: (spaceId: string, title?: string) => Promise<string>;
+  updateCanvas: (updates: Partial<Canvas> & { id: string }) => Promise<void>;
+  deleteCanvas: (id: string, soft?: boolean) => Promise<void>;
+
   // Trash & Revisions
   storageAdapter: typeof storage;
   isTrashOpen: boolean;
@@ -105,9 +113,12 @@ interface WorkspaceContextType {
   // Helpers
   getBacklinksForPage: (pageId: string) => BacklinkInfo[];
   
-  // Search
+  // Search & Command Palette
   isSearchOpen: boolean;
   setIsSearchOpen: (open: boolean) => void;
+  isCommandPaletteOpen: boolean;
+  setIsCommandPaletteOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
+  toggleCommandPalette: () => void;
 
   // Daily Notes & Quick Capture
   openDailyNote: (date?: Date) => Promise<string>;
@@ -150,12 +161,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [pages, setPages] = useState<Page[]>([]);
   const [databases, setDatabases] = useState<Database[]>([]);
+  const [canvases, setCanvases] = useState<Canvas[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Active state
   const [activeSpaceId, setActiveSpaceId] = useState<string | null>(null);
   const [activePageId, setActivePageId] = useState<string | null>(null);
   const [activeDatabaseId, setActiveDatabaseId] = useState<string | null>(null);
+  const [activeCanvasId, setActiveCanvasId] = useState<string | null>(null);
   const [isLandingPage, setIsLandingPage] = useState<boolean>(true);
   const [isGraphView, setIsGraphView] = useState<boolean>(false);
   const [selectedRowPageId, setSelectedRowPageId] = useState<string | null>(null);
@@ -171,6 +184,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Search & UI
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const toggleCommandPalette = useCallback(() => {
+    setIsCommandPaletteOpen(prev => !prev);
+  }, []);
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState(false);
   const [isSidebarOpen, setSidebarOpenRaw] = useState<boolean>(() => {
     const saved = localStorage.getItem('harbor_sidebar_open');
@@ -277,15 +294,17 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       setIsLoading(true);
       await seedInitialDataIfNeeded(storage);
-      const [allSpaces, allPages, allDatabases] = await Promise.all([
+      const [allSpaces, allPages, allDatabases, allCanvases] = await Promise.all([
         storage.getSpaces(),
         storage.getPages(),
         storage.getDatabases(),
+        storage.getCanvases(),
       ]);
 
       setSpaces(allSpaces);
       setPages(allPages);
       setDatabases(allDatabases);
+      setCanvases(allCanvases || []);
 
       // Default to landing page or initial space
       if (allSpaces.length > 0 && !activeSpaceId) {
@@ -380,6 +399,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setActiveSpaceId(target.spaceId);
       setActiveDatabaseId(databaseId);
       setActivePageId(null);
+      setActiveCanvasId(null);
       setIsLandingPage(false);
       setIsGraphView(false);
       setSelectedRowPageId(null);
@@ -402,6 +422,48 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setActiveTabId(tabId);
     }
   }, [databases]);
+
+  const navigateToCanvas = useCallback((canvasId: string, inSplitPane = false) => {
+    const target = canvases.find(c => c.id === canvasId);
+    if (target) {
+      if (inSplitPane) {
+        setSecondaryTab({
+          id: `tab-canvas-${canvasId}`,
+          type: 'canvas',
+          targetId: canvasId,
+          title: target.title || 'Untitled Canvas',
+          icon: '🎨',
+        });
+        setIsSplitView(true);
+        return;
+      }
+
+      setActiveSpaceId(target.spaceId);
+      setActiveCanvasId(canvasId);
+      setActivePageId(null);
+      setActiveDatabaseId(null);
+      setIsLandingPage(false);
+      setIsGraphView(false);
+      setSelectedRowPageId(null);
+
+      const tabId = `tab-canvas-${canvasId}`;
+      setTabs(prev => {
+        const exists = prev.find(t => t.id === tabId || (t.type === 'canvas' && t.targetId === canvasId));
+        if (exists) return prev;
+        return [
+          ...prev,
+          {
+            id: tabId,
+            type: 'canvas',
+            targetId: canvasId,
+            title: target.title || 'Untitled Canvas',
+            icon: '🎨',
+          },
+        ];
+      });
+      setActiveTabId(tabId);
+    }
+  }, [canvases]);
 
   const navigateToSpace = useCallback((spaceId: string) => {
     setActiveSpaceId(spaceId);
@@ -439,6 +501,15 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         if (db) setActiveSpaceId(db.spaceId);
         setActiveDatabaseId(tab.targetId);
         setActivePageId(null);
+        setActiveCanvasId(null);
+        setIsLandingPage(false);
+        setIsGraphView(false);
+      } else if (tab.type === 'canvas' && tab.targetId) {
+        const c = canvases.find(canvas => canvas.id === tab.targetId);
+        if (c) setActiveSpaceId(c.spaceId);
+        setActiveCanvasId(tab.targetId);
+        setActivePageId(null);
+        setActiveDatabaseId(null);
         setIsLandingPage(false);
         setIsGraphView(false);
       } else if (tab.type === 'graph') {
@@ -446,16 +517,18 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setIsLandingPage(false);
         setActivePageId(null);
         setActiveDatabaseId(null);
+        setActiveCanvasId(null);
       } else if (tab.type === 'landing') {
         setIsLandingPage(true);
         setIsGraphView(false);
         setActivePageId(null);
         setActiveDatabaseId(null);
+        setActiveCanvasId(null);
       }
       return currentTabs;
     });
     setSelectedRowPageId(null);
-  }, [pages, databases]);
+  }, [pages, databases, canvases]);
 
   const closeTab = useCallback((tabId: string) => {
     setTabs(prev => {
@@ -474,6 +547,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             if (page) setActiveSpaceId(page.spaceId);
             setActivePageId(nextTab.targetId);
             setActiveDatabaseId(null);
+            setActiveCanvasId(null);
             setIsLandingPage(false);
             setIsGraphView(false);
           } else if (nextTab.type === 'database' && nextTab.targetId) {
@@ -481,6 +555,15 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             if (db) setActiveSpaceId(db.spaceId);
             setActiveDatabaseId(nextTab.targetId);
             setActivePageId(null);
+            setActiveCanvasId(null);
+            setIsLandingPage(false);
+            setIsGraphView(false);
+          } else if (nextTab.type === 'canvas' && nextTab.targetId) {
+            const c = canvases.find(canvas => canvas.id === nextTab.targetId);
+            if (c) setActiveSpaceId(c.spaceId);
+            setActiveCanvasId(nextTab.targetId);
+            setActivePageId(null);
+            setActiveDatabaseId(null);
             setIsLandingPage(false);
             setIsGraphView(false);
           } else if (nextTab.type === 'graph') {
@@ -488,11 +571,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             setIsLandingPage(false);
             setActivePageId(null);
             setActiveDatabaseId(null);
+            setActiveCanvasId(null);
           } else {
             setIsLandingPage(true);
             setIsGraphView(false);
             setActivePageId(null);
             setActiveDatabaseId(null);
+            setActiveCanvasId(null);
           }
         } else {
           const fallbackTab: WorkspaceTab = { id: 'tab-landing', type: 'landing', title: 'Dashboard', icon: '🏠' };
@@ -501,6 +586,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           setIsGraphView(false);
           setActivePageId(null);
           setActiveDatabaseId(null);
+          setActiveCanvasId(null);
           return [fallbackTab];
         }
       }
@@ -511,7 +597,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setSecondaryTab(null);
       setIsSplitView(false);
     }
-  }, [activeTabId, secondaryTab, pages, databases]);
+  }, [activeTabId, secondaryTab, pages, databases, canvases]);
 
   const openTab = useCallback((tabData: Omit<WorkspaceTab, 'id'>, inSplitPane?: boolean) => {
     const generatedId = `tab-${tabData.type}-${tabData.targetId || Date.now()}`;
@@ -1078,13 +1164,19 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setDatabases(prev => prev.filter(d => !d.isDeleted));
   }, []);
 
-  const toggleFavorite = useCallback(async (id: string, type: 'page' | 'database' = 'page') => {
+  const toggleFavorite = useCallback(async (id: string, type: 'page' | 'database' | 'canvas' = 'page') => {
     if (type === 'page') {
       const p = pages.find(item => item.id === id);
       if (!p) return;
       const updated: Page = { ...p, isFavorite: !p.isFavorite, updatedAt: Date.now() };
       await storage.savePage(updated);
       setPages(prev => prev.map(item => item.id === id ? updated : item));
+    } else if (type === 'canvas') {
+      const c = canvases.find(item => item.id === id);
+      if (!c) return;
+      const updated: Canvas = { ...c, isFavorite: !c.isFavorite, updatedAt: Date.now() };
+      await storage.saveCanvas(updated);
+      setCanvases(prev => prev.map(item => item.id === id ? updated : item));
     } else {
       const d = databases.find(item => item.id === id);
       if (!d) return;
@@ -1092,7 +1184,92 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await storage.saveDatabase(updated);
       setDatabases(prev => prev.map(item => item.id === id ? updated : item));
     }
-  }, [pages, databases]);
+  }, [pages, databases, canvases]);
+
+  // Actions - Canvases
+  const createCanvas = useCallback(async (spaceId: string, title = 'Untitled Canvas'): Promise<string> => {
+    const newCanvasId = `canvas-${Date.now()}`;
+    const newCanvas: Canvas = {
+      id: newCanvasId,
+      spaceId,
+      title,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      data: {
+        nodes: [
+          {
+            id: `cnode-${Date.now()}-1`,
+            type: 'text',
+            x: 80,
+            y: 80,
+            width: 280,
+            height: 160,
+            color: 'blue',
+            title: 'Welcome to Canvas',
+            text: 'Drag cards, add markdown notes, embed workspace documents, or connect nodes with directional arrows.',
+          },
+        ],
+        edges: [],
+      },
+    };
+    await storage.saveCanvas(newCanvas);
+    setCanvases(prev => [newCanvas, ...prev]);
+    navigateToCanvas(newCanvasId);
+    return newCanvasId;
+  }, [navigateToCanvas]);
+
+  const updateCanvas = useCallback(async (updates: Partial<Canvas> & { id: string }) => {
+    const current = canvases.find(c => c.id === updates.id);
+    if (!current) return;
+    const merged: Canvas = { ...current, ...updates, updatedAt: Date.now() };
+    await storage.saveCanvas(merged);
+    setCanvases(prev => prev.map(c => (c.id === updates.id ? merged : c)));
+
+    if (updates.title !== undefined) {
+      setTabs(prev =>
+        prev.map(t => {
+          if (t.type === 'canvas' && t.targetId === updates.id) {
+            return {
+              ...t,
+              title: updates.title || 'Untitled Canvas',
+            };
+          }
+          return t;
+        })
+      );
+      setSecondaryTab(prev => {
+        if (prev && prev.type === 'canvas' && prev.targetId === updates.id) {
+          return {
+            ...prev,
+            title: updates.title || 'Untitled Canvas',
+          };
+        }
+        return prev;
+      });
+    }
+  }, [canvases]);
+
+  const deleteCanvas = useCallback(async (id: string, soft = true) => {
+    await storage.deleteCanvas(id, soft);
+    if (soft) {
+      setCanvases(prev =>
+        prev.map(c => (c.id === id ? { ...c, isDeleted: true, deletedAt: Date.now() } : c))
+      );
+    } else {
+      setCanvases(prev => prev.filter(c => c.id !== id));
+    }
+    setTabs(prev => prev.filter(t => !(t.type === 'canvas' && t.targetId === id)));
+    setSecondaryTab(prev => {
+      if (prev && prev.type === 'canvas' && prev.targetId === id) {
+        setIsSplitView(false);
+        return null;
+      }
+      return prev;
+    });
+    if (activeCanvasId === id) {
+      navigateToHome();
+    }
+  }, [activeCanvasId, navigateToHome]);
 
   // Database Row Operations (Rows are Pages with isDatabaseRow: true)
   const createDatabaseRow = useCallback(async (
@@ -1383,12 +1560,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         activeSpaceId,
         activePageId,
         activeDatabaseId,
+        activeCanvasId,
         isLandingPage,
         isGraphView,
         selectedRowPageId,
         spaces,
         pages,
         databases,
+        canvases,
         isLoading,
         theme,
         toggleTheme,
@@ -1415,6 +1594,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         navigateToGraph,
         navigateToPage,
         navigateToDatabase,
+        navigateToCanvas,
         navigateToSpace,
         openWikiLink,
         openRowModal,
@@ -1434,6 +1614,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         deleteDatabase,
         restoreDatabase,
         permanentlyDeleteDatabase,
+        createCanvas,
+        updateCanvas,
+        deleteCanvas,
         storageAdapter: storage,
         isTrashOpen,
         setIsTrashOpen,
@@ -1445,6 +1628,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         getBacklinksForPage,
         isSearchOpen,
         setIsSearchOpen,
+        isCommandPaletteOpen,
+        setIsCommandPaletteOpen,
+        toggleCommandPalette,
         openDailyNote,
         isQuickCaptureOpen,
         setIsQuickCaptureOpen,

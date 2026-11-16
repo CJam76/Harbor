@@ -7,7 +7,9 @@ import { LandingPage } from './components/landing/LandingPage';
 import { Editor } from './components/editor/Editor';
 import { DatabaseViewContainer } from './components/database/DatabaseViewContainer';
 import { GraphView } from './components/graph/GraphView';
+import { CanvasView } from './components/canvas/CanvasView';
 import { GlobalSearchModal } from './components/search/GlobalSearchModal';
+import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
 import { ExportImportModal } from './components/modals/ExportImportModal';
 import { NewSpaceModal } from './components/modals/NewSpaceModal';
 import { NewDatabaseModal } from './components/modals/NewDatabaseModal';
@@ -21,11 +23,13 @@ const WorkspaceShell: React.FC = () => {
     isGraphView,
     activePageId,
     activeDatabaseId,
+    activeCanvasId,
     isLoading,
     isSidebarOpen,
     setSidebarOpen,
     isInspectorOpen,
     toggleInspector,
+    toggleCommandPalette,
     isQuickCaptureOpen,
     setIsQuickCaptureOpen,
     openDailyNote,
@@ -109,6 +113,11 @@ const WorkspaceShell: React.FC = () => {
         e.preventDefault();
         toggleInspector();
       }
+      // Ctrl+P / Cmd+P: Obsidian Command Palette
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        toggleCommandPalette();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -128,6 +137,7 @@ const WorkspaceShell: React.FC = () => {
     toggleTypewriterMode,
     setSidebarOpen,
     toggleInspector,
+    toggleCommandPalette,
   ]);
 
   // Desktop Electron global hotkey bridge listener
@@ -150,12 +160,29 @@ const WorkspaceShell: React.FC = () => {
   }
 
   const currentActiveTab = tabs.find(t => t.id === activeTabId);
-  const primaryType = currentActiveTab ? currentActiveTab.type : (isLandingPage ? 'landing' : isGraphView ? 'graph' : activePageId ? 'page' : activeDatabaseId ? 'database' : 'landing');
-  const primaryTargetId = currentActiveTab ? currentActiveTab.targetId : (activePageId || activeDatabaseId || undefined);
+  const primaryType = currentActiveTab
+    ? currentActiveTab.type
+    : isLandingPage
+    ? 'landing'
+    : isGraphView
+    ? 'graph'
+    : activeCanvasId
+    ? 'canvas'
+    : activePageId
+    ? 'page'
+    : activeDatabaseId
+    ? 'database'
+    : 'landing';
+  const primaryTargetId = currentActiveTab
+    ? currentActiveTab.targetId
+    : activeCanvasId || activePageId || activeDatabaseId || undefined;
 
   const renderView = (tabType: string, targetId?: string, isSecondary = false) => {
     if (tabType === 'graph') {
       return <GraphView />;
+    }
+    if (tabType === 'canvas' && targetId) {
+      return <CanvasView canvasId={targetId} />;
     }
     if (tabType === 'landing') {
       return (
@@ -174,6 +201,7 @@ const WorkspaceShell: React.FC = () => {
 
     // Default / Fallback routing
     if (isGraphView) return <GraphView />;
+    if (activeCanvasId) return <CanvasView canvasId={activeCanvasId} />;
     if (isLandingPage) {
       return (
         <LandingPage
@@ -272,6 +300,7 @@ const WorkspaceShell: React.FC = () => {
       </div>
 
       {/* Dialog Modals */}
+      <CommandPaletteModal />
       <GlobalSearchModal />
       <ExportImportModal
         isOpen={exportModalOpen}

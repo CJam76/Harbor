@@ -20,7 +20,8 @@ import {
   Maximize,
   Star,
   PanelRight,
-  PanelLeft
+  PanelLeft,
+  Compass
 } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
 
@@ -33,9 +34,11 @@ export const Header: React.FC<HeaderProps> = ({ onOpenExportModal }) => {
     spaces,
     pages,
     databases,
+    canvases,
     activeSpaceId,
     activePageId,
     activeDatabaseId,
+    activeCanvasId,
     isLandingPage,
     isGraphView,
     navigateToHome,
@@ -58,11 +61,13 @@ export const Header: React.FC<HeaderProps> = ({ onOpenExportModal }) => {
     openDailyNote,
     setIsQuickCaptureOpen,
     toggleZenMode,
+    toggleCommandPalette,
   } = useWorkspace();
 
   const currentSpace = spaces.find(s => s.id === activeSpaceId);
   const currentPage = pages.find(p => p.id === activePageId);
   const currentDb = databases.find(d => d.id === activeDatabaseId);
+  const currentCanvas = canvases.find(c => c.id === activeCanvasId);
 
   // Compute breadcrumbs for nested pages
   const breadcrumbChain: { id: string; title: string; isSpace?: boolean }[] = [];
@@ -86,6 +91,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenExportModal }) => {
     breadcrumbChain.push({ id: currentPage.id, title: currentPage.title });
   } else if (currentDb) {
     breadcrumbChain.push({ id: currentDb.id, title: currentDb.title });
+  } else if (currentCanvas) {
+    breadcrumbChain.push({ id: currentCanvas.id, title: currentCanvas.title });
   }
 
   return (
@@ -231,6 +238,19 @@ export const Header: React.FC<HeaderProps> = ({ onOpenExportModal }) => {
           <span className="hidden sm:inline">Search...</span>
           <kbd className="hidden sm:inline text-[10px] font-mono bg-white dark:bg-slate-800 px-1 py-0.2 border border-slate-300 dark:border-slate-700 text-slate-400">
             Ctrl+K
+          </kbd>
+        </button>
+
+        {/* Command Palette Trigger */}
+        <button
+          onClick={toggleCommandPalette}
+          className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-violet-600 dark:text-violet-400 bg-violet-50/50 dark:bg-violet-950/30 hover:bg-violet-100 dark:hover:bg-violet-900/50 border border-violet-200/80 dark:border-violet-800/80 rounded-none transition-colors"
+          title="Command Palette (Ctrl+P)"
+        >
+          <Compass className="w-3 h-3 text-violet-500" />
+          <span className="hidden md:inline font-medium">Palette</span>
+          <kbd className="hidden sm:inline text-[10px] font-mono bg-white dark:bg-slate-800 px-1 py-0.2 border border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400">
+            Ctrl+P
           </kbd>
         </button>
 

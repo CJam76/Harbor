@@ -122,14 +122,59 @@ export interface WorkspaceBackup {
   spaces: Space[];
   pages: Page[];
   databases: Database[];
+  canvases?: Canvas[];
 }
 
-export type TabType = 'page' | 'database' | 'graph' | 'landing';
+export type CanvasNodeType = 'text' | 'file' | 'image' | 'group';
+
+export interface CanvasNode {
+  id: string;
+  type: CanvasNodeType;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color?: string; // Graphic realism accent color (e.g. blue, emerald, amber, rose, purple, slate)
+  title?: string;
+  text?: string;
+  fileId?: string; // target page id if type === 'file'
+  url?: string; // image or link url
+}
+
+export interface CanvasEdge {
+  id: string;
+  fromNode: string;
+  fromSide?: 'top' | 'right' | 'bottom' | 'left';
+  toNode: string;
+  toSide?: 'top' | 'right' | 'bottom' | 'left';
+  label?: string;
+  color?: string;
+}
+
+export interface CanvasData {
+  nodes: CanvasNode[];
+  edges: CanvasEdge[];
+}
+
+export interface Canvas {
+  id: string;
+  spaceId: string;
+  title: string;
+  description?: string;
+  data: CanvasData;
+  createdAt: number;
+  updatedAt: number;
+  isDeleted?: boolean;
+  deletedAt?: number;
+  isFavorite?: boolean;
+}
+
+export type TabType = 'page' | 'database' | 'graph' | 'landing' | 'canvas';
 
 export interface WorkspaceTab {
   id: string;
   type: TabType;
-  targetId?: string; // pageId or databaseId
+  targetId?: string; // pageId, databaseId, or canvasId
   title: string;
   icon?: string;
 }

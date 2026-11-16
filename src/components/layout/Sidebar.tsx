@@ -7,6 +7,8 @@ import {
   ChevronRight,
   FileText,
   Database as DbIcon,
+  LayoutGrid,
+  Compass,
   MoreVertical,
   Trash2,
   Copy,
@@ -24,7 +26,7 @@ import {
   PanelLeftClose
 } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
-import { Page, Space, Database } from '../../types';
+import { Page, Space, Database, Canvas } from '../../types';
 
 interface SidebarProps {
   onOpenNewSpaceModal: () => void;
@@ -39,9 +41,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     spaces,
     pages,
     databases,
+    canvases,
     activeSpaceId,
     activePageId,
     activeDatabaseId,
+    activeCanvasId,
     isLandingPage,
     isGraphView,
     isSidebarOpen,
@@ -50,6 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     navigateToGraph,
     navigateToPage,
     navigateToDatabase,
+    navigateToCanvas,
     createPage,
     deletePage,
     duplicatePage,
@@ -57,6 +62,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     deleteSpace,
     renameSpace,
     deleteDatabase,
+    createCanvas,
+    updateCanvas,
+    deleteCanvas,
     setIsSearchOpen,
     openDailyNote,
     setIsQuickCaptureOpen,
@@ -64,13 +72,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsTrashOpen,
     trashCount,
     toggleFavorite,
+    toggleCommandPalette,
   } = useWorkspace();
 
   // Favorites state
   const [isFavoritesCollapsed, setIsFavoritesCollapsed] = useState(false);
   const favoritePages = pages.filter(p => !p.isDeleted && p.isFavorite);
   const favoriteDatabases = databases.filter(d => !d.isDeleted && d.isFavorite);
-  const hasFavorites = favoritePages.length > 0 || favoriteDatabases.length > 0;
+  const favoriteCanvases = canvases.filter(c => !c.isDeleted && c.isFavorite);
+  const hasFavorites = favoritePages.length > 0 || favoriteDatabases.length > 0 || favoriteCanvases.length > 0;
 
   // Collapsed spaces tracking
   const [collapsedSpaces, setCollapsedSpaces] = useState<Record<string, boolean>>({});
@@ -80,7 +90,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
-    type: 'space' | 'page' | 'database';
+    type: 'space' | 'page' | 'database' | 'canvas';
     id: string;
     item: any;
   } | null>(null);
@@ -179,7 +189,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   // Open context menu
-  const openContextMenu = (e: React.MouseEvent, type: 'space' | 'page' | 'database', item: any) => {
+  const openContextMenu = (e: React.MouseEvent, type: 'space' | 'page' | 'database' | 'canvas', item: any) => {
     e.preventDefault();
     e.stopPropagation();
     const x = Math.min(e.clientX, window.innerWidth - 220);
@@ -403,6 +413,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
 
           <button
+            onClick={toggleCommandPalette}
+            className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-none transition-colors"
+            title="Command Palette (Ctrl+P)"
+          >
+            <div className="flex items-center gap-2.5">
+              <Compass className="w-3.5 h-3.5 text-violet-500" />
+              <span>Command Palette</span>
+            </div>
+            <kbd className="text-[10px] font-mono bg-white dark:bg-slate-800 px-1 py-0.5 border border-slate-200 dark:border-slate-700 text-slate-400">
+              Ctrl+P
+            </kbd>
+          </button>
+
+          <button
             onClick={() => setIsSearchOpen(true)}
             className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-none transition-colors"
           >
@@ -429,7 +453,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div className="flex items-center gap-1">
                 <span className="text-[10px] font-mono text-slate-400">
-                  {favoritePages.length + favoriteDatabases.length}
+                  {favoritePages.length + favoriteDatabases.length + favoriteCanvases.length}
                 </span>
                 {isFavoritesCollapsed ? (
                   <ChevronRight className="w-3 h-3 text-slate-400" />
@@ -491,6 +515,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onClick={async e => {
                           e.stopPropagation();
                           await toggleFavorite(db.id, 'database');
+                        }}
+                        className="opacity-0 group-hover/fav:opacity-100 p-0.5 text-amber-500 hover:text-slate-400 transition-opacity"
+                        title="Remove from favorites"
+                      >
+                        <Star className="w-3 h-3 fill-amber-500" />
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {favoriteCanvases.map(c => {
+                  const isActive = activeCanvasId === c.id;
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => navigateToCanvas(c.id)}
+                      className={`flex items-center justify-between px-3 py-1.5 text-xs cursor-pointer select-none transition-colors rounded-none group/fav ${
+                        isActive
+                          ? 'bg-[#0284c7]/10 dark:bg-[#0284c7]/20 text-[#0284c7] dark:text-[#38bdf8] font-medium border-l-2 border-l-[#0284c7]'
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 border-l-2 border-l-transparent'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <LayoutGrid className="w-3.5 h-3.5 text-purple-500 flex-shrink-0" />
+                        <span className="truncate">{c.title || 'Untitled Canvas'}</span>
+                      </div>
+                      <button
+                        onClick={async e => {
+                          e.stopPropagation();
+                          await toggleFavorite(c.id, 'canvas');
                         }}
                         className="opacity-0 group-hover/fav:opacity-100 p-0.5 text-amber-500 hover:text-slate-400 transition-opacity"
                         title="Remove from favorites"
@@ -571,6 +625,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     >
                       <DbIcon className="w-3 h-3" />
                     </button>
+                    {/* + Canvas */}
+                    <button
+                      onClick={async e => {
+                        e.stopPropagation();
+                        await createCanvas(space.id, 'New Canvas');
+                        setCollapsedSpaces(prev => ({ ...prev, [space.id]: false }));
+                      }}
+                      title="Add Canvas whiteboard to this space"
+                      className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                    >
+                      <LayoutGrid className="w-3 h-3" />
+                    </button>
                     {/* Space kebab */}
                     <button
                       onClick={e => openContextMenu(e, 'space', space)}
@@ -611,6 +677,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         </div>
                       );
                     })}
+
+                    {/* Canvases in Space */}
+                    {canvases
+                      .filter(c => !c.isDeleted && c.spaceId === space.id)
+                      .map(c => {
+                        const isActive = activeCanvasId === c.id;
+                        return (
+                          <div
+                            key={c.id}
+                            onClick={() => navigateToCanvas(c.id)}
+                            onContextMenu={e => openContextMenu(e, 'canvas', c)}
+                            className={`flex items-center justify-between px-3 py-1 text-xs cursor-pointer select-none transition-colors rounded-none group/canvas ${
+                              isActive
+                                ? 'bg-[#0284c7]/10 dark:bg-[#0284c7]/20 text-[#0284c7] dark:text-[#38bdf8] font-medium border-l-2 border-l-[#0284c7]'
+                                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 border-l-2 border-l-transparent'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <LayoutGrid className="w-3.5 h-3.5 text-purple-500 flex-shrink-0" />
+                              <span className="truncate">{c.title}</span>
+                            </div>
+                            <button
+                              onClick={e => openContextMenu(e, 'canvas', c)}
+                              className="opacity-0 group-hover/canvas:opacity-100 p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400"
+                            >
+                              <MoreVertical className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
 
                     {/* Pages in Space (Nested Tree) */}
                     {renderPageTree(space.id, null, 0)}
@@ -791,6 +887,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <Trash2 className="w-3.5 h-3.5 text-rose-500" />
                 <span>Delete Database</span>
+              </button>
+            </>
+          )}
+
+          {contextMenu.type === 'canvas' && (
+            <>
+              <button
+                onClick={async () => {
+                  const newTitle = prompt('Enter new canvas title:', contextMenu.item.title);
+                  if (newTitle && newTitle.trim()) {
+                    await updateCanvas({ id: contextMenu.id, title: newTitle.trim() });
+                  }
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"
+              >
+                <Edit2 className="w-3.5 h-3.5 text-slate-400" />
+                <span>Rename Canvas</span>
+              </button>
+              <button
+                onClick={() => toggleFavorite(contextMenu.id, 'canvas')}
+                className="w-full text-left px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"
+              >
+                <Star className={`w-3.5 h-3.5 ${contextMenu.item.isFavorite ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}`} />
+                <span>{contextMenu.item.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}</span>
+              </button>
+              <div className="h-px bg-slate-200 dark:bg-slate-800 my-1" />
+              <button
+                onClick={async () => {
+                  if (window.confirm(`Delete canvas "${contextMenu.item.title}"?`)) {
+                    await deleteCanvas(contextMenu.id);
+                  }
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 flex items-center gap-2"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                <span>Delete Canvas</span>
               </button>
             </>
           )}

@@ -1,4 +1,4 @@
-import { Database, Page, Space } from '../../types';
+import { Database, Page, Space, Canvas } from '../../types';
 
 export const INITIAL_SPACES: Space[] = [
   {
@@ -555,6 +555,96 @@ Parse \`[[Page Title]]\` in markdown text and establish automatic backlink indic
   }
 ];
 
+export const INITIAL_CANVASES: Canvas[] = [
+  {
+    id: 'canvas-capstone-architecture',
+    spaceId: 'space-capstone',
+    title: 'Capstone System Architecture & Canvas',
+    description: 'Spatial whiteboard of core subsystems, pipelines, and data flow.',
+    createdAt: Date.now() - 1000 * 60 * 60 * 24 * 3,
+    updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 1,
+    isFavorite: true,
+    data: {
+      nodes: [
+        {
+          id: 'cnode-1',
+          type: 'text',
+          x: 80,
+          y: 100,
+          width: 280,
+          height: 180,
+          color: 'blue',
+          title: 'Core Engine Subsystem',
+          text: '### Local SQLite/IndexedDB Storage\n- Offline-first transactional persistence\n- Revisions & 30-day trash lifecycle\n- ZERO external cloud telemetry',
+        },
+        {
+          id: 'cnode-2',
+          type: 'file',
+          x: 440,
+          y: 80,
+          width: 320,
+          height: 220,
+          color: 'emerald',
+          title: 'Capstone Specification',
+          fileId: 'page-capstone-spec',
+          text: 'Embedded live reference to Capstone Project Overview note.',
+        },
+        {
+          id: 'cnode-3',
+          type: 'text',
+          x: 80,
+          y: 360,
+          width: 280,
+          height: 160,
+          color: 'purple',
+          title: 'Knowledge Graph Engine',
+          text: '### Dynamic Force Simulation\n- Wiki-link bidirectional edge extraction\n- 1st & 2nd degree neighborhood traversal',
+        },
+        {
+          id: 'cnode-4',
+          type: 'text',
+          x: 440,
+          y: 360,
+          width: 320,
+          height: 160,
+          color: 'amber',
+          title: 'Notion Database Grid',
+          text: '### Multi-View Engine\n- Kanban drag-and-drop\n- Table summary aggregates\n- CSV bidirectional export',
+        },
+      ],
+      edges: [
+        {
+          id: 'cedge-1',
+          fromNode: 'cnode-1',
+          fromSide: 'right',
+          toNode: 'cnode-2',
+          toSide: 'left',
+          label: 'powers',
+          color: 'blue',
+        },
+        {
+          id: 'cedge-2',
+          fromNode: 'cnode-1',
+          fromSide: 'bottom',
+          toNode: 'cnode-3',
+          toSide: 'top',
+          label: 'indexes',
+          color: 'purple',
+        },
+        {
+          id: 'cedge-3',
+          fromNode: 'cnode-2',
+          fromSide: 'bottom',
+          toNode: 'cnode-4',
+          toSide: 'top',
+          label: 'tracks deliverables',
+          color: 'emerald',
+        },
+      ],
+    },
+  },
+];
+
 export async function seedInitialDataIfNeeded(storageInstance: any) {
   const existingSpaces = await storageInstance.getSpaces();
   if (existingSpaces.length === 0) {
@@ -567,7 +657,21 @@ export async function seedInitialDataIfNeeded(storageInstance: any) {
     for (const page of INITIAL_PAGES) {
       await storageInstance.savePage(page);
     }
+    for (const canvas of INITIAL_CANVASES) {
+      await storageInstance.saveCanvas(canvas);
+    }
     return true;
   }
+
+  // Also seed initial canvases if table is newly added
+  if (storageInstance.getCanvases) {
+    const existingCanvases = await storageInstance.getCanvases();
+    if (existingCanvases.length === 0) {
+      for (const canvas of INITIAL_CANVASES) {
+        await storageInstance.saveCanvas(canvas);
+      }
+    }
+  }
+
   return false;
 }
