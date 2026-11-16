@@ -12,6 +12,7 @@ import { ExportImportModal } from './components/modals/ExportImportModal';
 import { NewSpaceModal } from './components/modals/NewSpaceModal';
 import { NewDatabaseModal } from './components/modals/NewDatabaseModal';
 import { QuickCaptureModal } from './components/modals/QuickCaptureModal';
+import { TrashModal } from './components/modals/TrashModal';
 import { Loader2, X } from 'lucide-react';
 
 const WorkspaceShell: React.FC = () => {
@@ -39,6 +40,8 @@ const WorkspaceShell: React.FC = () => {
     setIsZenMode,
     toggleZenMode,
     toggleTypewriterMode,
+    isTrashOpen,
+    setIsTrashOpen,
   } = useWorkspace();
 
   // Modals state
@@ -257,6 +260,10 @@ const WorkspaceShell: React.FC = () => {
       <QuickCaptureModal
         isOpen={isQuickCaptureOpen}
         onClose={() => setIsQuickCaptureOpen(false)}
+      />
+      <TrashModal
+        isOpen={isTrashOpen}
+        onClose={() => setIsTrashOpen(false)}
       />
     </div>
   );

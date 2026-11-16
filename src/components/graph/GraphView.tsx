@@ -87,6 +87,7 @@ export const GraphView: React.FC<{ filterPageId?: string }> = ({ filterPageId })
   // Construct nodes and edges from pages and wiki links
   const { nodes, edges, nodeMap } = useMemo(() => {
     const activePages = pages.filter(p => {
+      if (p.isDeleted) return false;
       if (selectedSpaceId !== 'all' && p.spaceId !== selectedSpaceId) return false;
       return true;
     });
@@ -97,7 +98,7 @@ export const GraphView: React.FC<{ filterPageId?: string }> = ({ filterPageId })
     });
 
     // Also map database titles
-    databases.forEach(d => {
+    databases.filter(d => !d.isDeleted).forEach(d => {
       pageTitleToId.set(d.title.toLowerCase().trim(), d.id);
     });
 

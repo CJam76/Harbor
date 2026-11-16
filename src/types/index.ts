@@ -58,6 +58,8 @@ export interface Database {
   defaultViewId: string;
   createdAt: number;
   updatedAt: number;
+  isDeleted?: boolean;
+  deletedAt?: number;
 }
 
 export interface Page {
@@ -76,6 +78,17 @@ export interface Page {
   createdAt: number;
   updatedAt: number;
   isArchived?: boolean;
+  isDeleted?: boolean;
+  deletedAt?: number;
+}
+
+export interface PageRevision {
+  id: string;
+  pageId: string;
+  title: string;
+  content: string;
+  timestamp: number;
+  wordCount: number;
 }
 
 export interface Space {

@@ -17,6 +17,7 @@ import {
   Sparkles,
   AlignLeft,
   Clock,
+  History,
   BookOpen,
   ArrowUpRight,
   ChevronRight,
@@ -64,6 +65,7 @@ import {
   generateBlockId,
 } from '../../lib/editorBlocks';
 import katex from 'katex';
+import { RevisionHistoryModal } from '../modals/RevisionHistoryModal';
 
 export interface EditorProps {
   pageId?: string;
@@ -146,6 +148,7 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
 
   // Dynamic card full-width state
   const [isFullWidth, setIsFullWidth] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // Outline / Backlinks / Connections panels collapse state
   const [isOutlineOpen, setIsOutlineOpen] = useState(true);
@@ -1168,6 +1171,17 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
                   <span className="hidden sm:inline">Typewriter</span>
                 </button>
 
+                {/* Revision History Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setIsHistoryOpen(true)}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-none border border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors text-[11px]"
+                  title="Revision History & Backups"
+                >
+                  <History className="w-3 h-3" />
+                  <span className="hidden sm:inline">History</span>
+                </button>
+
                 {/* Zen Focus Mode Toggle */}
                 <button
                   type="button"
@@ -2158,6 +2172,15 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
           )}
         </div>
       </aside>
+      )}
+
+      {/* Revision History Modal */}
+      {currentPage && (
+        <RevisionHistoryModal
+          isOpen={isHistoryOpen}
+          page={currentPage}
+          onClose={() => setIsHistoryOpen(false)}
+        />
       )}
     </div>
   );

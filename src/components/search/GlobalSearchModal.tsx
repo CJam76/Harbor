@@ -53,6 +53,7 @@ export const GlobalSearchModal: React.FC = () => {
 
   // Match databases
   for (const db of databases) {
+    if (db.isDeleted) continue;
     const space = spaces.find(s => s.id === db.spaceId);
     if (!cleanQuery || db.title.toLowerCase().includes(cleanQuery) || db.description?.toLowerCase().includes(cleanQuery)) {
       results.push({
@@ -68,6 +69,7 @@ export const GlobalSearchModal: React.FC = () => {
 
   // Match pages & database rows
   for (const page of pages) {
+    if (page.isDeleted) continue;
     const space = spaces.find(s => s.id === page.spaceId);
     const titleMatch = page.title.toLowerCase().includes(cleanQuery);
     const contentMatch = page.content.toLowerCase().includes(cleanQuery);

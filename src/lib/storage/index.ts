@@ -1,10 +1,11 @@
 import Dexie, { Table } from 'dexie';
-import { Database, Page, Space, WorkspaceBackup, DatabaseColumn, DatabaseView } from '../../types';
+import { Database, Page, Space, WorkspaceBackup, DatabaseColumn, DatabaseView, PageRevision } from '../../types';
 
 export class HarborDexieDB extends Dexie {
   spaces!: Table<Space, string>;
   pages!: Table<Page, string>;
   databases!: Table<Database, string>;
+  revisions!: Table<PageRevision, string>;
 
   constructor() {
     super('harbor_workspace_db');
@@ -12,6 +13,12 @@ export class HarborDexieDB extends Dexie {
       spaces: 'id, name, order, createdAt',
       pages: 'id, spaceId, parentId, title, isDatabaseRow, databaseId, order, updatedAt',
       databases: 'id, spaceId, title, createdAt',
+    });
+    this.version(2).stores({
+      spaces: 'id, name, order, createdAt',
+      pages: 'id, spaceId, parentId, title, isDatabaseRow, databaseId, order, updatedAt, isDeleted, deletedAt',
+      databases: 'id, spaceId, title, createdAt, isDeleted, deletedAt',
+      revisions: 'id, pageId, timestamp',
     });
   }
 }
@@ -25,13 +32,25 @@ export interface IStorageAdapter {
   getPages(spaceId?: string): Promise<Page[]>;
   getPage(id: string): Promise<Page | undefined>;
   savePage(page: Page): Promise<void>;
-  deletePage(id: string): Promise<void>;
+  deletePage(id: string, soft?: boolean): Promise<void>;
+  restorePage(id: string): Promise<void>;
+  permanentlyDeletePage(id: string): Promise<void>;
   movePage(pageId: string, newParentId: string | null, targetSpaceId?: string, newOrder?: number): Promise<void>;
 
   getDatabases(spaceId?: string): Promise<Database[]>;
   getDatabase(id: string): Promise<Database | undefined>;
   saveDatabase(database: Database): Promise<void>;
-  deleteDatabase(id: string): Promise<void>;
+  deleteDatabase(id: string, soft?: boolean): Promise<void>;
+  restoreDatabase(id: string): Promise<void>;
+  permanentlyDeleteDatabase(id: string): Promise<void>;
+
+  // Revision History
+  saveRevision(revision: PageRevision): Promise<void>;
+  getRevisions(pageId: string): Promise<PageRevision[]>;
+  deleteRevisions(pageId: string): Promise<void>;
+
+  // Trash
+  emptyTrash(): Promise<void>;
 
   exportWorkspace(): Promise<WorkspaceBackup>;
   importWorkspace(backup: WorkspaceBackup): Promise<void>;
@@ -88,23 +107,52 @@ class DexieStorageAdapter implements IStorageAdapter {
     });
   }
 
-  async deletePage(id: string): Promise<void> {
-    // Delete page and any sub-pages recursively
+  async deletePage(id: string, soft = true): Promise<void> {
     const allPages = await this.db.pages.toArray();
-    const toDelete = new Set<string>([id]);
+    const toAffect = new Set<string>([id]);
     
     let added = true;
     while (added) {
       added = false;
       for (const p of allPages) {
-        if (p.parentId && toDelete.has(p.parentId) && !toDelete.has(p.id)) {
-          toDelete.add(p.id);
+        if (p.parentId && toAffect.has(p.parentId) && !toAffect.has(p.id)) {
+          toAffect.add(p.id);
           added = true;
         }
       }
     }
 
-    await this.db.pages.bulkDelete(Array.from(toDelete));
+    if (!soft) {
+      await this.db.pages.bulkDelete(Array.from(toAffect));
+      for (const pId of toAffect) {
+        await this.db.revisions.where('pageId').equals(pId).delete();
+      }
+      return;
+    }
+
+    // Soft delete
+    const now = Date.now();
+    for (const pId of toAffect) {
+      const p = await this.db.pages.get(pId);
+      if (p) {
+        p.isDeleted = true;
+        p.deletedAt = now;
+        await this.db.pages.put(p);
+      }
+    }
+  }
+
+  async restorePage(id: string): Promise<void> {
+    const p = await this.db.pages.get(id);
+    if (p) {
+      p.isDeleted = false;
+      p.deletedAt = undefined;
+      await this.db.pages.put(p);
+    }
+  }
+
+  async permanentlyDeletePage(id: string): Promise<void> {
+    await this.deletePage(id, false);
   }
 
   async movePage(pageId: string, newParentId: string | null, targetSpaceId?: string, newOrder?: number): Promise<void> {
@@ -140,11 +188,73 @@ class DexieStorageAdapter implements IStorageAdapter {
     });
   }
 
-  async deleteDatabase(id: string): Promise<void> {
-    await this.db.transaction('rw', [this.db.databases, this.db.pages], async () => {
-      await this.db.databases.delete(id);
-      await this.db.pages.where('databaseId').equals(id).delete();
-    });
+  async deleteDatabase(id: string, soft = true): Promise<void> {
+    if (!soft) {
+      await this.db.transaction('rw', [this.db.databases, this.db.pages], async () => {
+        await this.db.databases.delete(id);
+        await this.db.pages.where('databaseId').equals(id).delete();
+      });
+      return;
+    }
+
+    const db = await this.db.databases.get(id);
+    if (db) {
+      db.isDeleted = true;
+      db.deletedAt = Date.now();
+      await this.db.databases.put(db);
+    }
+  }
+
+  async restoreDatabase(id: string): Promise<void> {
+    const db = await this.db.databases.get(id);
+    if (db) {
+      db.isDeleted = false;
+      db.deletedAt = undefined;
+      await this.db.databases.put(db);
+    }
+  }
+
+  async permanentlyDeleteDatabase(id: string): Promise<void> {
+    await this.deleteDatabase(id, false);
+  }
+
+  async saveRevision(revision: PageRevision): Promise<void> {
+    await this.db.revisions.put(revision);
+    const count = await this.db.revisions.where('pageId').equals(revision.pageId).count();
+    if (count > 50) {
+      const oldest = await this.db.revisions
+        .where('pageId')
+        .equals(revision.pageId)
+        .sortBy('timestamp');
+      const toRemove = oldest.slice(0, count - 50);
+      for (const r of toRemove) {
+        await this.db.revisions.delete(r.id);
+      }
+    }
+  }
+
+  async getRevisions(pageId: string): Promise<PageRevision[]> {
+    return (await this.db.revisions.where('pageId').equals(pageId).toArray())
+      .sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  async deleteRevisions(pageId: string): Promise<void> {
+    await this.db.revisions.where('pageId').equals(pageId).delete();
+  }
+
+  async emptyTrash(): Promise<void> {
+    const allPages = await this.db.pages.toArray();
+    const deletedPages = allPages.filter(p => p.isDeleted);
+    for (const p of deletedPages) {
+      await this.db.pages.delete(p.id);
+      await this.db.revisions.where('pageId').equals(p.id).delete();
+    }
+    const allDbs = await this.db.databases.toArray();
+    const deletedDbs = allDbs.filter(d => d.isDeleted);
+    for (const d of deletedDbs) {
+      await this.db.databases.delete(d.id);
+      await this.db.pages.where('databaseId').equals(d.id).delete();
+    }
   }
 
   async exportWorkspace(): Promise<WorkspaceBackup> {

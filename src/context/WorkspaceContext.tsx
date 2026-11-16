@@ -73,14 +73,25 @@ interface WorkspaceContextType {
   // Actions - Pages
   createPage: (spaceId: string, parentId?: string | null, title?: string, content?: string) => Promise<string>;
   updatePage: (updates: Partial<Page> & { id: string }) => Promise<void>;
-  deletePage: (id: string) => Promise<void>;
+  deletePage: (id: string, soft?: boolean) => Promise<void>;
+  restorePage: (id: string) => Promise<void>;
+  permanentlyDeletePage: (id: string) => Promise<void>;
   duplicatePage: (id: string) => Promise<string>;
   movePage: (pageId: string, newParentId: string | null, targetSpaceId?: string, newOrder?: number) => Promise<void>;
 
   // Actions - Databases
   createDatabase: (spaceId: string, title: string, template?: 'tasks' | 'assignments' | 'reading' | 'projects' | 'blank') => Promise<string>;
   updateDatabase: (updates: Partial<Database> & { id: string }) => Promise<void>;
-  deleteDatabase: (id: string) => Promise<void>;
+  deleteDatabase: (id: string, soft?: boolean) => Promise<void>;
+  restoreDatabase: (id: string) => Promise<void>;
+  permanentlyDeleteDatabase: (id: string) => Promise<void>;
+
+  // Trash & Revisions
+  storageAdapter: typeof storage;
+  isTrashOpen: boolean;
+  setIsTrashOpen: (open: boolean) => void;
+  trashCount: number;
+  emptyTrash: () => Promise<void>;
 
   // Actions - Rows
   createDatabaseRow: (databaseId: string, title?: string, initialProps?: Record<string, any>) => Promise<string>;
@@ -166,6 +177,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isParagraphFocusMode, setIsParagraphFocusMode] = useState<boolean>(() => {
     return localStorage.getItem('harbor_paragraph_focus') === 'true';
   });
+
+  // Trash & Revisions State
+  const [isTrashOpen, setIsTrashOpen] = useState(false);
+  const trashCount = pages.filter(p => p.isDeleted && !p.isDatabaseRow).length + databases.filter(d => d.isDeleted).length;
+  const lastRevisionTimeRef = useRef<Record<string, number>>({});
+  const lastRevisionContentRef = useRef<Record<string, string>>({});
 
   const toggleZenMode = useCallback(() => {
     setIsZenMode(prev => !prev);
@@ -700,6 +717,26 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             updatedAt: Date.now()
           };
           await storage.savePage(merged);
+
+          // Revision snapshot check
+          const lastTime = lastRevisionTimeRef.current[updates.id] || 0;
+          const lastContent = lastRevisionContentRef.current[updates.id] || '';
+          const currentContent = merged.content || '';
+          const timeSinceLastRev = Date.now() - lastTime;
+          const charDiff = Math.abs(currentContent.length - lastContent.length);
+
+          if ((timeSinceLastRev > 5 * 60 * 1000 || charDiff >= 50 || lastTime === 0) && currentContent.trim().length > 0) {
+            lastRevisionTimeRef.current[updates.id] = Date.now();
+            lastRevisionContentRef.current[updates.id] = currentContent;
+            await storage.saveRevision({
+              id: `rev-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+              pageId: merged.id,
+              title: merged.title || 'Untitled',
+              content: currentContent,
+              timestamp: Date.now(),
+              wordCount: currentContent.trim().split(/\s+/).filter(Boolean).length,
+            });
+          }
         }
         setSaveStatus('saved');
         setLastSavedAt(Date.now());
@@ -710,9 +747,19 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }, 400);
   }, []);
 
-  const deletePage = useCallback(async (id: string) => {
-    await storage.deletePage(id);
-    setPages(prev => prev.filter(p => p.id !== id && p.parentId !== id));
+  const deletePage = useCallback(async (id: string, soft = true) => {
+    await storage.deletePage(id, soft);
+    if (soft) {
+      setPages(prev =>
+        prev.map(p =>
+          p.id === id || p.parentId === id
+            ? { ...p, isDeleted: true, deletedAt: Date.now() }
+            : p
+        )
+      );
+    } else {
+      setPages(prev => prev.filter(p => p.id !== id && p.parentId !== id));
+    }
     setTabs(prev => prev.filter(t => !(t.type === 'page' && t.targetId === id)));
     setSecondaryTab(prev => {
       if (prev && prev.type === 'page' && prev.targetId === id) {
@@ -725,6 +772,22 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       navigateToHome();
     }
   }, [activePageId, navigateToHome]);
+
+  const restorePage = useCallback(async (id: string) => {
+    await storage.restorePage(id);
+    setPages(prev =>
+      prev.map(p =>
+        p.id === id
+          ? { ...p, isDeleted: false, deletedAt: undefined }
+          : p
+      )
+    );
+  }, []);
+
+  const permanentlyDeletePage = useCallback(async (id: string) => {
+    await storage.permanentlyDeletePage(id);
+    setPages(prev => prev.filter(p => p.id !== id));
+  }, []);
 
   const duplicatePage = useCallback(async (id: string): Promise<string> => {
     const original = pages.find(p => p.id === id);
@@ -933,10 +996,19 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [databases]);
 
-  const deleteDatabase = useCallback(async (id: string) => {
-    await storage.deleteDatabase(id);
-    setDatabases(prev => prev.filter(d => d.id !== id));
-    setPages(prev => prev.filter(p => p.databaseId !== id));
+  const deleteDatabase = useCallback(async (id: string, soft = true) => {
+    await storage.deleteDatabase(id, soft);
+    if (soft) {
+      setDatabases(prev =>
+        prev.map(d => (d.id === id ? { ...d, isDeleted: true, deletedAt: Date.now() } : d))
+      );
+      setPages(prev =>
+        prev.map(p => (p.databaseId === id ? { ...p, isDeleted: true, deletedAt: Date.now() } : p))
+      );
+    } else {
+      setDatabases(prev => prev.filter(d => d.id !== id));
+      setPages(prev => prev.filter(p => p.databaseId !== id));
+    }
     setTabs(prev => prev.filter(t => !(t.type === 'database' && t.targetId === id)));
     setSecondaryTab(prev => {
       if (prev && prev.type === 'database' && prev.targetId === id) {
@@ -949,6 +1021,28 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       navigateToHome();
     }
   }, [activeDatabaseId, navigateToHome]);
+
+  const restoreDatabase = useCallback(async (id: string) => {
+    await storage.restoreDatabase(id);
+    setDatabases(prev =>
+      prev.map(d => (d.id === id ? { ...d, isDeleted: false, deletedAt: undefined } : d))
+    );
+    setPages(prev =>
+      prev.map(p => (p.databaseId === id ? { ...p, isDeleted: false, deletedAt: undefined } : p))
+    );
+  }, []);
+
+  const permanentlyDeleteDatabase = useCallback(async (id: string) => {
+    await storage.permanentlyDeleteDatabase(id);
+    setDatabases(prev => prev.filter(d => d.id !== id));
+    setPages(prev => prev.filter(p => p.databaseId !== id));
+  }, []);
+
+  const emptyTrash = useCallback(async () => {
+    await storage.emptyTrash();
+    setPages(prev => prev.filter(p => !p.isDeleted));
+    setDatabases(prev => prev.filter(d => !d.isDeleted));
+  }, []);
 
   // Database Row Operations (Rows are Pages with isDatabaseRow: true)
   const createDatabaseRow = useCallback(async (
@@ -1112,7 +1206,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const getBacklinksForPage = useCallback((pageId: string): BacklinkInfo[] => {
     const targetPage = pages.find(p => p.id === pageId);
     if (!targetPage) return [];
-    return findBacklinks(targetPage.title, pages, pageId);
+    return findBacklinks(targetPage.title, pages.filter(p => !p.isDeleted), pageId);
   }, [pages]);
 
   // Export / Import
@@ -1277,11 +1371,20 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         createPage,
         updatePage,
         deletePage,
+        restorePage,
+        permanentlyDeletePage,
         duplicatePage,
         movePage,
         createDatabase,
         updateDatabase,
         deleteDatabase,
+        restoreDatabase,
+        permanentlyDeleteDatabase,
+        storageAdapter: storage,
+        isTrashOpen,
+        setIsTrashOpen,
+        trashCount,
+        emptyTrash,
         createDatabaseRow,
         updateDatabaseRow,
         deleteDatabaseRow,

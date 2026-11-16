@@ -59,6 +59,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     openDailyNote,
     setIsQuickCaptureOpen,
     resetToSampleData,
+    setIsTrashOpen,
+    trashCount,
   } = useWorkspace();
 
   // Collapsed spaces tracking
@@ -179,7 +181,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Recursively render nested pages
   const renderPageTree = (spaceId: string, parentId: string | null = null, depth = 0) => {
     const spacePages = pages.filter(
-      p => p.spaceId === spaceId && !p.isDatabaseRow && (parentId ? p.parentId === parentId : !p.parentId)
+      p => !p.isDeleted && p.spaceId === spaceId && !p.isDatabaseRow && (parentId ? p.parentId === parentId : !p.parentId)
     );
 
     if (spacePages.length === 0) return null;
@@ -187,7 +189,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return (
       <div className="flex flex-col">
         {spacePages.map(page => {
-          const subPages = pages.filter(p => p.parentId === page.id && !p.isDatabaseRow);
+          const subPages = pages.filter(p => !p.isDeleted && p.parentId === page.id && !p.isDatabaseRow);
           const hasChildren = subPages.length > 0;
           const isCollapsed = collapsedPages[page.id] ?? false;
           const isActive = activePageId === page.id;
@@ -417,7 +419,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex-1 overflow-y-auto px-1 py-1 space-y-3">
           {spaces.map(space => {
             const isCollapsed = collapsedSpaces[space.id] ?? false;
-            const spaceDatabases = databases.filter(d => d.spaceId === space.id);
+            const spaceDatabases = databases.filter(d => !d.isDeleted && d.spaceId === space.id);
 
             return (
               <div
@@ -515,6 +517,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             );
           })}
+        </div>
+
+        {/* Workspace Trash Can Button */}
+        <div className="px-2 py-1 border-t border-slate-200/80 dark:border-slate-800">
+          <button
+            onClick={() => setIsTrashOpen(true)}
+            className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 rounded-none transition-colors group/trash"
+            title="Open Workspace Trash Can"
+          >
+            <div className="flex items-center gap-2">
+              <Trash2 className="w-3.5 h-3.5 text-slate-400 group-hover/trash:text-slate-700 dark:group-hover/trash:text-slate-200" />
+              <span>Trash</span>
+            </div>
+            {trashCount > 0 && (
+              <span className="px-1.5 py-0.2 bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[10px] font-medium border border-rose-500/20 font-mono">
+                {trashCount}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Footer info & sample data reset */}
