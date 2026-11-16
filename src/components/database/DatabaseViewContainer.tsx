@@ -13,7 +13,9 @@ import {
   Check,
   Trash2,
   Edit2,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Search,
+  X
 } from 'lucide-react';
 import { Database, Page, DatabaseColumn, ViewType, ColumnType } from '../../types';
 import { useWorkspace } from '../../context/WorkspaceContext';
@@ -23,6 +25,7 @@ import { ListView } from './views/ListView';
 import { CalendarView } from './views/CalendarView';
 import { GalleryView } from './views/GalleryView';
 import { RecordModal } from './RecordModal';
+import { CoverPickerModal } from '../modals/CoverPickerModal';
 
 export interface DatabaseViewContainerProps {
   databaseId?: string;
@@ -54,6 +57,7 @@ export const DatabaseViewContainer: React.FC<DatabaseViewContainerProps> = ({ da
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const [addColumnModalOpen, setAddColumnModalOpen] = useState(false);
+  const [coverPickerOpen, setCoverPickerOpen] = useState(false);
 
   // Filter / Sort state
   const [filterColumnId, setFilterColumnId] = useState<string>('all');
@@ -175,9 +179,54 @@ export const DatabaseViewContainer: React.FC<DatabaseViewContainerProps> = ({ da
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[#f4f7fa] dark:bg-[#070b14] select-none">
+      {/* Cover Banner */}
+      {database.coverImage && (
+        <div className="relative group/cover h-36 sm:h-44 w-full overflow-hidden border-b border-slate-200 dark:border-slate-800 shrink-0">
+          {database.coverImage.startsWith('http') || database.coverImage.startsWith('data:') ? (
+            <img
+              src={database.coverImage}
+              alt="Database Cover"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div
+              style={{ background: database.coverImage }}
+              className="w-full h-full"
+            />
+          )}
+          <div className="absolute bottom-2 right-4 flex items-center gap-1.5 opacity-0 group-hover/cover:opacity-100 transition-opacity bg-black/50 backdrop-blur-xs p-1">
+            <button
+              onClick={() => setCoverPickerOpen(true)}
+              className="px-2 py-1 bg-white/90 dark:bg-slate-900/90 text-slate-700 dark:text-slate-200 hover:text-slate-900 text-xs font-medium"
+            >
+              Change cover
+            </button>
+            <button
+              onClick={() => updateDatabase({ id: database.id, coverImage: undefined })}
+              className="px-2 py-1 bg-white/90 dark:bg-slate-900/90 text-rose-500 hover:text-rose-600 text-xs font-medium"
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Database Title & Header */}
-      <div className="px-6 pt-6 pb-2">
+      <div className="px-6 pt-5 pb-2">
         <div className="max-w-6xl mx-auto">
+          {/* Header Action Buttons (Add cover) */}
+          <div className="flex items-center gap-2 mb-1 text-xs text-slate-400">
+            {!database.coverImage && (
+              <button
+                onClick={() => setCoverPickerOpen(true)}
+                className="hover:text-slate-700 dark:hover:text-slate-200 flex items-center gap-1 transition-colors"
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>Add cover</span>
+              </button>
+            )}
+          </div>
+
           <input
             type="text"
             value={database.title}
@@ -268,8 +317,28 @@ export const DatabaseViewContainer: React.FC<DatabaseViewContainerProps> = ({ da
             </div>
           </div>
 
-          {/* Right Toolbar: Filter, Sort, Columns, CSV Export, + New */}
+          {/* Right Toolbar: Live Search, Filter, Sort, Columns, CSV Export, + New */}
           <div className="flex items-center gap-1.5">
+            {/* Live Search Input */}
+            <div className="flex items-center gap-1.5 px-2 py-1 border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 text-xs w-36 sm:w-48">
+              <Search className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+              <input
+                type="text"
+                placeholder="Search database..."
+                value={filterQuery}
+                onChange={e => setFilterQuery(e.target.value)}
+                className="w-full bg-transparent border-none outline-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
+              />
+              {filterQuery && (
+                <button
+                  onClick={() => setFilterQuery('')}
+                  className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
             {/* Filter */}
             <div className="relative">
               <button
@@ -412,6 +481,49 @@ export const DatabaseViewContainer: React.FC<DatabaseViewContainerProps> = ({ da
         </div>
       </div>
 
+      {/* Active Filter & Sort Pill Bar */}
+      {(filterQuery.trim() || sortColumnId) && (
+        <div className="px-6 py-1.5 bg-slate-100/60 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-800 flex items-center gap-2 text-xs flex-wrap">
+          <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Active:</span>
+
+          {filterQuery.trim() && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white dark:bg-slate-800 border border-[#0284c7]/40 text-[#0284c7] dark:text-[#38bdf8] text-[11px] font-medium">
+              <span>Matches: "{filterQuery.trim()}"</span>
+              <button
+                onClick={() => setFilterQuery('')}
+                className="hover:text-rose-500"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {sortColumnId && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[11px]">
+              <span>
+                Sorted by {database.columns.find(c => c.id === sortColumnId)?.name || 'Column'} ({sortDirection === 'asc' ? 'A→Z' : 'Z→A'})
+              </span>
+              <button
+                onClick={() => setSortColumnId('')}
+                className="hover:text-rose-500"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          <button
+            onClick={() => {
+              setFilterQuery('');
+              setSortColumnId('');
+            }}
+            className="text-[11px] text-slate-400 hover:text-rose-500 underline ml-auto"
+          >
+            Clear all
+          </button>
+        </div>
+      )}
+
       {/* Main View Area */}
       <div className="flex-1 overflow-auto p-6">
         <div className="max-w-6xl mx-auto">
@@ -526,6 +638,14 @@ export const DatabaseViewContainer: React.FC<DatabaseViewContainerProps> = ({ da
           </div>
         </div>
       )}
+      {/* Cover Picker Modal */}
+      <CoverPickerModal
+        isOpen={coverPickerOpen}
+        onClose={() => setCoverPickerOpen(false)}
+        onSelectCover={url => updateDatabase({ id: database.id, coverImage: url })}
+        onRemoveCover={() => updateDatabase({ id: database.id, coverImage: undefined })}
+        currentCover={database.coverImage}
+      />
     </div>
   );
 };

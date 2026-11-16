@@ -69,6 +69,7 @@ import {
 } from '../../lib/editorBlocks';
 import katex from 'katex';
 import { RevisionHistoryModal } from '../modals/RevisionHistoryModal';
+import { CoverPickerModal } from '../modals/CoverPickerModal';
 
 export interface EditorProps {
   pageId?: string;
@@ -155,6 +156,7 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
   // Dynamic card full-width state
   const [isFullWidth, setIsFullWidth] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [coverPickerOpen, setCoverPickerOpen] = useState(false);
 
   // Outline / Backlinks / Connections panels collapse state
   const [isOutlineOpen, setIsOutlineOpen] = useState(true);
@@ -997,6 +999,17 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
         handleConvertBlockType(id, 'bookmark', { url: 'https://', content: 'Web Bookmark' });
       },
     },
+    {
+      id: 'toc',
+      title: 'Table of Contents',
+      desc: 'Dynamic interactive outline of page headings',
+      icon: ListOrdered,
+      action: (id: string) => {
+        const block = blocks.find(b => b.id === id);
+        if (block) handleBlockTextChange(id, block.content.replace(/\/([a-zA-Z0-9_-]*)$/, ''));
+        handleConvertBlockType(id, 'toc');
+      },
+    },
   ];
 
   const filteredSlashCommands = slashCommands.filter(
@@ -1124,10 +1137,56 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
         )}
 
         <div
-          className={`w-full ${cardMaxWidth} paper-sheet ${isSecondaryPane ? 'p-5 sm:p-8' : 'p-8 sm:p-12 lg:p-14'} min-h-[calc(100vh-6rem)] h-fit flex flex-col mb-12 transition-all duration-200 shadow-sm`}
+          className={`w-full ${cardMaxWidth} paper-sheet ${isSecondaryPane ? 'p-5 sm:p-8' : 'p-8 sm:p-12 lg:p-14'} min-h-[calc(100vh-6rem)] h-fit flex flex-col mb-12 transition-all duration-200 shadow-sm relative overflow-hidden`}
         >
+          {/* Page Cover Banner */}
+          {currentPage.coverImage && (
+            <div
+              className={`relative w-full h-44 sm:h-56 mb-8 overflow-hidden group/cover select-none border-b border-slate-200 dark:border-slate-800 ${
+                isSecondaryPane
+                  ? '-mt-5 sm:-mt-8 -mx-5 sm:-mx-8 w-[calc(100%+2.5rem)] sm:w-[calc(100%+4rem)]'
+                  : '-mt-8 sm:-mt-12 lg:-mt-14 -mx-8 sm:-mx-12 lg:-mx-14 w-[calc(100%+4rem)] sm:w-[calc(100%+6rem)] lg:w-[calc(100%+7rem)]'
+              }`}
+            >
+              <img
+                src={currentPage.coverImage}
+                alt="Page cover"
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover/cover:opacity-100 transition-opacity" />
+              <div className="absolute bottom-3 right-4 flex items-center gap-1.5 opacity-0 group-hover/cover:opacity-100 transition-opacity z-10">
+                <button
+                  type="button"
+                  onClick={() => setCoverPickerOpen(true)}
+                  className="px-2.5 py-1 bg-white/90 dark:bg-slate-900/90 text-slate-700 dark:text-slate-200 hover:text-slate-900 text-xs font-medium border border-slate-200 dark:border-slate-800 shadow-sm transition-colors"
+                >
+                  Change cover
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updatePage({ id: currentPage.id, coverImage: undefined })}
+                  className="px-2.5 py-1 bg-white/90 dark:bg-slate-900/90 text-rose-500 hover:text-rose-600 text-xs font-medium border border-slate-200 dark:border-slate-800 shadow-sm transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Document Title Header */}
           <div className="mb-6 group/title">
+            {!currentPage.coverImage && (
+              <div className="flex items-center gap-2 mb-2 text-xs text-slate-400 opacity-0 group-hover/title:opacity-100 transition-opacity select-none">
+                <button
+                  type="button"
+                  onClick={() => setCoverPickerOpen(true)}
+                  className="hover:text-slate-700 dark:hover:text-slate-200 flex items-center gap-1 transition-colors"
+                >
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  <span>Add cover</span>
+                </button>
+              </div>
+            )}
             <div className="flex items-start justify-between gap-3">
               <input
                 type="text"
@@ -1403,6 +1462,13 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
                           >
                             <Code className="w-3.5 h-3.5" />
                             <span>Code Block</span>
+                          </button>
+                          <button
+                            onClick={() => handleConvertBlockType(block.id, 'toc')}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100 dark:hover:bg-slate-800"
+                          >
+                            <ListOrdered className="w-3.5 h-3.5" />
+                            <span>Table of Contents</span>
                           </button>
 
                           <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
@@ -1920,6 +1986,55 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
                         </div>
                       )}
 
+                      {/* 16b. TABLE OF CONTENTS EMBEDDABLE BLOCK */}
+                      {block.type === 'toc' && (
+                        <div className="w-full my-3 p-4 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 select-none">
+                          <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 uppercase tracking-wider mb-2.5 pb-1.5 border-b border-slate-200/60 dark:border-slate-800/60">
+                            <span className="flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-300">
+                              <ListOrdered className="w-3.5 h-3.5 text-[#0284c7]" />
+                              Table of Contents
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              {blocks.filter(b => b.type === 'h1' || b.type === 'h2' || b.type === 'h3').length} sections
+                            </span>
+                          </div>
+                          {blocks.filter(b => b.type === 'h1' || b.type === 'h2' || b.type === 'h3').length === 0 ? (
+                            <div className="text-xs text-slate-400 italic py-1">
+                              Add headings (H1, H2, H3) to populate this table of contents.
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              {blocks
+                                .filter(b => b.type === 'h1' || b.type === 'h2' || b.type === 'h3')
+                                .map(h => {
+                                  const indentClass =
+                                    h.type === 'h1' ? 'pl-0 font-medium' : h.type === 'h2' ? 'pl-4 text-xs' : 'pl-8 text-xs';
+                                  return (
+                                    <button
+                                      key={h.id}
+                                      type="button"
+                                      onClick={() => {
+                                        const el = document.getElementById(`block-${h.id}`);
+                                        if (el) {
+                                          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                          const ta = textareaRefs.current.get(h.id);
+                                          if (ta) ta.focus();
+                                        }
+                                      }}
+                                      className={`w-full text-left py-1 px-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-[#0284c7] transition-colors rounded-none flex items-center gap-1.5 text-slate-600 dark:text-slate-300 ${indentClass}`}
+                                    >
+                                      <span className="text-slate-400 font-mono text-[10px]">
+                                        {h.type === 'h1' ? '•' : h.type === 'h2' ? '–' : '›'}
+                                      </span>
+                                      <span className="truncate">{h.content || 'Untitled Heading'}</span>
+                                    </button>
+                                  );
+                                })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* 17. STANDARD PARAGRAPH (Plain text / regular writing) */}
                       {block.type === 'p' && (
                         <div className="relative w-full">
@@ -2228,6 +2343,17 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
           isOpen={isHistoryOpen}
           page={currentPage}
           onClose={() => setIsHistoryOpen(false)}
+        />
+      )}
+
+      {/* Page Cover Picker Modal */}
+      {currentPage && (
+        <CoverPickerModal
+          isOpen={coverPickerOpen}
+          onClose={() => setCoverPickerOpen(false)}
+          onSelectCover={url => updatePage({ id: currentPage.id, coverImage: url })}
+          onRemoveCover={() => updatePage({ id: currentPage.id, coverImage: undefined })}
+          currentCover={currentPage.coverImage}
         />
       )}
     </div>

@@ -53,6 +53,7 @@ export interface Database {
   title: string;
   description?: string;
   icon?: string;
+  coverImage?: string;
   columns: DatabaseColumn[];
   views: DatabaseView[];
   defaultViewId: string;

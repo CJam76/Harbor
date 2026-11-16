@@ -15,7 +15,8 @@ export type BlockType =
   | 'table'
   | 'toggle'
   | 'image'
-  | 'bookmark';
+  | 'bookmark'
+  | 'toc';
 
 export interface EditorBlock {
   id: string;
@@ -247,6 +248,17 @@ export function parseMarkdownToBlocks(markdown: string): EditorBlock[] {
       continue;
     }
 
+    // 11. Table of Contents Block (<!-- toc --> or [TOC])
+    if (trimmed === '<!-- toc -->' || trimmed.toUpperCase() === '[TOC]' || trimmed.toUpperCase() === '[[TOC]]') {
+      blocks.push({
+        id: generateBlockId(),
+        type: 'toc',
+        content: 'Table of Contents',
+      });
+      i++;
+      continue;
+    }
+
     // 8. Headings (#, ##, ###)
     if (/^#\s+/.test(line)) {
       blocks.push({
@@ -413,6 +425,9 @@ export function serializeBlocksToMarkdown(blocks: EditorBlock[]): string {
         break;
       case 'bookmark':
         serialized = `[🔖 ${block.content || block.url}](${block.url || ''})`;
+        break;
+      case 'toc':
+        serialized = '<!-- toc -->';
         break;
       case 'p':
       default:
