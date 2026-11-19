@@ -10,6 +10,24 @@ interface BoardViewProps {
   onOpenRow: (rowId: string) => void;
 }
 
+const getDateStatus = (dateStr: string) => {
+  if (!dateStr) return null;
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(dateStr);
+    target.setHours(0, 0, 0, 0);
+    const diffTime = target.getTime() - today.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return { label: 'Overdue', color: 'text-rose-500 bg-rose-500/10 border-rose-500/25' };
+    if (diffDays === 0) return { label: 'Today', color: 'text-cyan-500 bg-cyan-500/10 border-cyan-500/25' };
+    if (diffDays === 1) return { label: 'Tomorrow', color: 'text-amber-500 bg-amber-500/10 border-amber-500/25' };
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 export const BoardView: React.FC<BoardViewProps> = ({
   database,
   rows,
@@ -272,9 +290,20 @@ export const BoardView: React.FC<BoardViewProps> = ({
                     {(dateVal || checkCol) && (
                       <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
                         {dateVal ? (
-                          <div className="flex items-center gap-1 font-mono text-[10px]">
-                            <Calendar className="w-3 h-3 text-slate-400" />
-                            <span>{dateVal}</span>
+                          <div className="flex items-center gap-1.5 font-mono text-[10px]">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-slate-400" />
+                              <span>{dateVal}</span>
+                            </div>
+                            {getDateStatus(String(dateVal)) && (
+                              <span
+                                className={`px-1 py-0.2 border text-[9px] font-semibold uppercase tracking-wider rounded-[2px] ${
+                                  getDateStatus(String(dateVal))!.color
+                                }`}
+                              >
+                                {getDateStatus(String(dateVal))!.label}
+                              </span>
+                            )}
                           </div>
                         ) : (
                           <span />

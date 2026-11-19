@@ -72,6 +72,64 @@ import { RevisionHistoryModal } from '../modals/RevisionHistoryModal';
 import { CoverPickerModal } from '../modals/CoverPickerModal';
 import { LocalGraphMini } from '../graph/LocalGraphMini';
 
+const renderFormattedText = (text: string, onOpenWikiLink: (target: string) => void) => {
+  if (!text) return null;
+  const regex = /\[\[(.*?)\]\]|\[(.*?)\]\((.*?)\)/g;
+  const elements: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      elements.push(text.slice(lastIndex, match.index));
+    }
+    if (match[1] !== undefined) {
+      const wikiTarget = match[1];
+      elements.push(
+        <span
+          key={`wiki-${match.index}`}
+          onClick={e => {
+            e.stopPropagation();
+            onOpenWikiLink(wikiTarget);
+          }}
+          className="inline-flex items-center gap-0.5 px-1.5 py-0.2 mx-0.5 bg-cyan-500/10 hover:bg-cyan-500/25 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 rounded-[2px] font-mono text-[0.88em] cursor-pointer hover:underline select-none transition-colors"
+          title={`Click to open page [[${wikiTarget}]]`}
+        >
+          <span>[[{wikiTarget}]]</span>
+          <ArrowUpRight className="w-2.5 h-2.5 opacity-80" />
+        </span>
+      );
+    } else if (match[2] !== undefined && match[3] !== undefined) {
+      const linkLabel = match[2];
+      const linkUrl = match[3];
+      elements.push(
+        <a
+          key={`link-${match.index}`}
+          href={linkUrl}
+          onClick={e => {
+            e.stopPropagation();
+            if (linkUrl.startsWith('http://') || linkUrl.startsWith('https://')) {
+              window.open(linkUrl, '_blank');
+            } else {
+              onOpenWikiLink(linkUrl);
+            }
+          }}
+          className="inline-flex items-center gap-0.5 text-cyan-600 dark:text-cyan-400 hover:underline mx-0.5 cursor-pointer font-medium"
+          title={linkUrl}
+        >
+          <span>{linkLabel}</span>
+          <ArrowUpRight className="w-2.5 h-2.5 opacity-80" />
+        </a>
+      );
+    }
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    elements.push(text.slice(lastIndex));
+  }
+  return elements;
+};
+
 export interface EditorProps {
   pageId?: string;
   isSecondaryPane?: boolean;
@@ -1124,7 +1182,7 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
         onDrop={handleDrop}
         onPaste={handlePaste}
         className={`flex-1 overflow-y-auto ${isSecondaryPane ? 'p-3 sm:p-5' : 'p-6 sm:p-10 lg:p-12'} ${
-          isTypewriterMode ? 'pb-[60vh]' : ''
+          isTypewriterMode ? 'pb-[35vh]' : 'pb-6'
         } flex justify-center items-start relative`}
       >
         {/* Drag & Drop Visual Target Overlay */}
@@ -1138,7 +1196,7 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
         )}
 
         <div
-          className={`w-full ${cardMaxWidth} paper-sheet ${isSecondaryPane ? 'p-5 sm:p-8' : 'p-8 sm:p-12 lg:p-14'} min-h-[calc(100vh-6rem)] h-fit flex flex-col mb-12 transition-all duration-200 shadow-sm relative overflow-hidden`}
+          className={`w-full ${cardMaxWidth} paper-sheet ${isSecondaryPane ? 'p-5 sm:p-8' : 'p-8 sm:p-12 lg:p-14'} min-h-[min(100%,calc(100vh-6rem))] h-fit flex flex-col mb-4 transition-all duration-200 shadow-sm relative overflow-hidden`}
         >
           {/* Page Cover Banner */}
           {currentPage.coverImage && (
@@ -1573,21 +1631,37 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
                           >
                             {block.checked && <Check className="w-3 h-3 stroke-[3]" />}
                           </button>
-                          <textarea
-                            ref={el => el && textareaRefs.current.set(block.id, el)}
-                            value={block.content}
-                            onFocus={() => setActiveBlockId(block.id)}
-                            onChange={e => handleBlockTextChange(block.id, e.target.value)}
-                            onKeyDown={e => handleBlockKeyDown(e, block)}
-                            onKeyUp={e => handleBlockKeyUp(e, block)}
-                            rows={1}
-                            placeholder="To-do item"
-                            className={`w-full bg-transparent border-none outline-none resize-none text-base leading-relaxed overflow-hidden break-words whitespace-pre-wrap transition-all ${
-                              block.checked
-                                ? 'line-through text-slate-400 dark:text-slate-500'
-                                : 'text-slate-800 dark:text-slate-200'
-                            } ${typography === 'serif' ? 'font-serif' : 'font-sans'}`}
-                          />
+                          {!isFocused && (block.content.includes('[[') || /\[.*?\]\(.*?\)/.test(block.content)) ? (
+                            <div
+                              onClick={() => {
+                                setActiveBlockId(block.id);
+                                setTimeout(() => textareaRefs.current.get(block.id)?.focus(), 10);
+                              }}
+                              className={`w-full cursor-text text-base leading-relaxed overflow-hidden break-words whitespace-pre-wrap transition-all py-0.5 select-text ${
+                                block.checked
+                                  ? 'line-through text-slate-400 dark:text-slate-500'
+                                  : 'text-slate-800 dark:text-slate-200'
+                              } ${typography === 'serif' ? 'font-serif' : 'font-sans'}`}
+                            >
+                              {renderFormattedText(block.content, openWikiLink)}
+                            </div>
+                          ) : (
+                            <textarea
+                              ref={el => el && textareaRefs.current.set(block.id, el)}
+                              value={block.content}
+                              onFocus={() => setActiveBlockId(block.id)}
+                              onChange={e => handleBlockTextChange(block.id, e.target.value)}
+                              onKeyDown={e => handleBlockKeyDown(e, block)}
+                              onKeyUp={e => handleBlockKeyUp(e, block)}
+                              rows={1}
+                              placeholder="To-do item"
+                              className={`w-full bg-transparent border-none outline-none resize-none text-base leading-relaxed overflow-hidden break-words whitespace-pre-wrap transition-all ${
+                                block.checked
+                                  ? 'line-through text-slate-400 dark:text-slate-500'
+                                  : 'text-slate-800 dark:text-slate-200'
+                              } ${typography === 'serif' ? 'font-serif' : 'font-sans'}`}
+                            />
+                          )}
                         </div>
                       )}
 
@@ -1595,19 +1669,33 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
                       {block.type === 'bullet' && (
                         <div className="flex items-start gap-2.5 w-full">
                           <span className="mt-2 w-1.5 h-1.5 flex-shrink-0 rounded-full bg-slate-700 dark:bg-slate-300 select-none" />
-                          <textarea
-                            ref={el => el && textareaRefs.current.set(block.id, el)}
-                            value={block.content}
-                            onFocus={() => setActiveBlockId(block.id)}
-                            onChange={e => handleBlockTextChange(block.id, e.target.value)}
-                            onKeyDown={e => handleBlockKeyDown(e, block)}
-                            onKeyUp={e => handleBlockKeyUp(e, block)}
-                            rows={1}
-                            placeholder="List item"
-                            className={`w-full bg-transparent border-none outline-none resize-none text-base text-slate-800 dark:text-slate-200 leading-relaxed overflow-hidden break-words whitespace-pre-wrap ${
-                              typography === 'serif' ? 'font-serif' : 'font-sans'
-                            }`}
-                          />
+                          {!isFocused && (block.content.includes('[[') || /\[.*?\]\(.*?\)/.test(block.content)) ? (
+                            <div
+                              onClick={() => {
+                                setActiveBlockId(block.id);
+                                setTimeout(() => textareaRefs.current.get(block.id)?.focus(), 10);
+                              }}
+                              className={`w-full cursor-text text-base text-slate-800 dark:text-slate-200 leading-relaxed overflow-hidden break-words whitespace-pre-wrap py-0.5 select-text ${
+                                typography === 'serif' ? 'font-serif' : 'font-sans'
+                              }`}
+                            >
+                              {renderFormattedText(block.content, openWikiLink)}
+                            </div>
+                          ) : (
+                            <textarea
+                              ref={el => el && textareaRefs.current.set(block.id, el)}
+                              value={block.content}
+                              onFocus={() => setActiveBlockId(block.id)}
+                              onChange={e => handleBlockTextChange(block.id, e.target.value)}
+                              onKeyDown={e => handleBlockKeyDown(e, block)}
+                              onKeyUp={e => handleBlockKeyUp(e, block)}
+                              rows={1}
+                              placeholder="List item"
+                              className={`w-full bg-transparent border-none outline-none resize-none text-base text-slate-800 dark:text-slate-200 leading-relaxed overflow-hidden break-words whitespace-pre-wrap ${
+                                typography === 'serif' ? 'font-serif' : 'font-sans'
+                              }`}
+                            />
+                          )}
                         </div>
                       )}
 
@@ -1617,38 +1705,66 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
                           <span className="font-mono text-xs text-slate-400 select-none mt-1 min-w-[16px]">
                             {index + 1}.
                           </span>
-                          <textarea
-                            ref={el => el && textareaRefs.current.set(block.id, el)}
-                            value={block.content}
-                            onFocus={() => setActiveBlockId(block.id)}
-                            onChange={e => handleBlockTextChange(block.id, e.target.value)}
-                            onKeyDown={e => handleBlockKeyDown(e, block)}
-                            onKeyUp={e => handleBlockKeyUp(e, block)}
-                            rows={1}
-                            placeholder="Numbered item"
-                            className={`w-full bg-transparent border-none outline-none resize-none text-base text-slate-800 dark:text-slate-200 leading-relaxed overflow-hidden break-words whitespace-pre-wrap ${
-                              typography === 'serif' ? 'font-serif' : 'font-sans'
-                            }`}
-                          />
+                          {!isFocused && (block.content.includes('[[') || /\[.*?\]\(.*?\)/.test(block.content)) ? (
+                            <div
+                              onClick={() => {
+                                setActiveBlockId(block.id);
+                                setTimeout(() => textareaRefs.current.get(block.id)?.focus(), 10);
+                              }}
+                              className={`w-full cursor-text text-base text-slate-800 dark:text-slate-200 leading-relaxed overflow-hidden break-words whitespace-pre-wrap py-0.5 select-text ${
+                                typography === 'serif' ? 'font-serif' : 'font-sans'
+                              }`}
+                            >
+                              {renderFormattedText(block.content, openWikiLink)}
+                            </div>
+                          ) : (
+                            <textarea
+                              ref={el => el && textareaRefs.current.set(block.id, el)}
+                              value={block.content}
+                              onFocus={() => setActiveBlockId(block.id)}
+                              onChange={e => handleBlockTextChange(block.id, e.target.value)}
+                              onKeyDown={e => handleBlockKeyDown(e, block)}
+                              onKeyUp={e => handleBlockKeyUp(e, block)}
+                              rows={1}
+                              placeholder="Numbered item"
+                              className={`w-full bg-transparent border-none outline-none resize-none text-base text-slate-800 dark:text-slate-200 leading-relaxed overflow-hidden break-words whitespace-pre-wrap ${
+                                typography === 'serif' ? 'font-serif' : 'font-sans'
+                              }`}
+                            />
+                          )}
                         </div>
                       )}
 
                       {/* 7. QUOTE */}
                       {block.type === 'quote' && (
                         <div className="border-l-2 border-slate-800 dark:border-slate-200 pl-4 py-1 italic bg-slate-50/50 dark:bg-slate-900/30">
-                          <textarea
-                            ref={el => el && textareaRefs.current.set(block.id, el)}
-                            value={block.content}
-                            onFocus={() => setActiveBlockId(block.id)}
-                            onChange={e => handleBlockTextChange(block.id, e.target.value)}
-                            onKeyDown={e => handleBlockKeyDown(e, block)}
-                            onKeyUp={e => handleBlockKeyUp(e, block)}
-                            rows={1}
-                            placeholder="Empty quote"
-                            className={`w-full bg-transparent border-none outline-none resize-none text-base text-slate-700 dark:text-slate-300 leading-relaxed overflow-hidden break-words whitespace-pre-wrap ${
-                              typography === 'serif' ? 'font-serif' : 'font-sans'
-                            }`}
-                          />
+                          {!isFocused && (block.content.includes('[[') || /\[.*?\]\(.*?\)/.test(block.content)) ? (
+                            <div
+                              onClick={() => {
+                                setActiveBlockId(block.id);
+                                setTimeout(() => textareaRefs.current.get(block.id)?.focus(), 10);
+                              }}
+                              className={`w-full cursor-text text-base text-slate-700 dark:text-slate-300 leading-relaxed overflow-hidden break-words whitespace-pre-wrap py-0.5 select-text ${
+                                typography === 'serif' ? 'font-serif' : 'font-sans'
+                              }`}
+                            >
+                              {renderFormattedText(block.content, openWikiLink)}
+                            </div>
+                          ) : (
+                            <textarea
+                              ref={el => el && textareaRefs.current.set(block.id, el)}
+                              value={block.content}
+                              onFocus={() => setActiveBlockId(block.id)}
+                              onChange={e => handleBlockTextChange(block.id, e.target.value)}
+                              onKeyDown={e => handleBlockKeyDown(e, block)}
+                              onKeyUp={e => handleBlockKeyUp(e, block)}
+                              rows={1}
+                              placeholder="Empty quote"
+                              className={`w-full bg-transparent border-none outline-none resize-none text-base text-slate-700 dark:text-slate-300 leading-relaxed overflow-hidden break-words whitespace-pre-wrap ${
+                                typography === 'serif' ? 'font-serif' : 'font-sans'
+                              }`}
+                            />
+                          )}
                         </div>
                       )}
 
@@ -1656,19 +1772,33 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
                       {block.type === 'callout' && (
                         <div className="flex items-start gap-3 p-3.5 bg-sky-50/60 dark:bg-sky-950/30 border border-sky-200/80 dark:border-sky-900/60 rounded-none w-full">
                           <Info className="w-4 h-4 text-[#0284c7] flex-shrink-0 mt-0.5" />
-                          <textarea
-                            ref={el => el && textareaRefs.current.set(block.id, el)}
-                            value={block.content}
-                            onFocus={() => setActiveBlockId(block.id)}
-                            onChange={e => handleBlockTextChange(block.id, e.target.value)}
-                            onKeyDown={e => handleBlockKeyDown(e, block)}
-                            onKeyUp={e => handleBlockKeyUp(e, block)}
-                            rows={1}
-                            placeholder="Callout text..."
-                            className={`w-full bg-transparent border-none outline-none resize-none text-sm text-slate-800 dark:text-slate-200 leading-relaxed overflow-hidden break-words whitespace-pre-wrap ${
-                              typography === 'serif' ? 'font-serif' : 'font-sans'
-                            }`}
-                          />
+                          {!isFocused && (block.content.includes('[[') || /\[.*?\]\(.*?\)/.test(block.content)) ? (
+                            <div
+                              onClick={() => {
+                                setActiveBlockId(block.id);
+                                setTimeout(() => textareaRefs.current.get(block.id)?.focus(), 10);
+                              }}
+                              className={`w-full cursor-text text-sm text-slate-800 dark:text-slate-200 leading-relaxed overflow-hidden break-words whitespace-pre-wrap py-0.5 select-text ${
+                                typography === 'serif' ? 'font-serif' : 'font-sans'
+                              }`}
+                            >
+                              {renderFormattedText(block.content, openWikiLink)}
+                            </div>
+                          ) : (
+                            <textarea
+                              ref={el => el && textareaRefs.current.set(block.id, el)}
+                              value={block.content}
+                              onFocus={() => setActiveBlockId(block.id)}
+                              onChange={e => handleBlockTextChange(block.id, e.target.value)}
+                              onKeyDown={e => handleBlockKeyDown(e, block)}
+                              onKeyUp={e => handleBlockKeyUp(e, block)}
+                              rows={1}
+                              placeholder="Callout text..."
+                              className={`w-full bg-transparent border-none outline-none resize-none text-sm text-slate-800 dark:text-slate-200 leading-relaxed overflow-hidden break-words whitespace-pre-wrap ${
+                                typography === 'serif' ? 'font-serif' : 'font-sans'
+                              }`}
+                            />
+                          )}
                         </div>
                       )}
 
@@ -2039,33 +2169,50 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
                       {/* 17. STANDARD PARAGRAPH (Plain text / regular writing) */}
                       {block.type === 'p' && (
                         <div className="relative w-full">
-                          <textarea
-                            ref={el => el && textareaRefs.current.set(block.id, el)}
-                            value={block.content}
-                            onFocus={() => setActiveBlockId(block.id)}
-                            onChange={e => handleBlockTextChange(block.id, e.target.value)}
-                            onKeyDown={e => handleBlockKeyDown(e, block)}
-                            onKeyUp={e => handleBlockKeyUp(e, block)}
-                            rows={1}
-                            placeholder={isFocused ? "Type '/' for commands or write in plain text..." : ''}
-                            className={`w-full bg-transparent border-none outline-none resize-none text-base text-slate-800 dark:text-slate-200 leading-relaxed overflow-hidden break-words whitespace-pre-wrap placeholder:text-slate-300 dark:placeholder:text-slate-700 ${
-                              typography === 'serif' ? 'font-serif' : 'font-sans'
-                            }`}
-                          />
-                          {/* Wiki link chips in paragraph */}
-                          {extractWikiLinks(block.content).length > 0 && !isFocused && (
-                            <div className="flex flex-wrap gap-1.5 mt-1 select-none">
+                          {!isFocused && (block.content.includes('[[') || /\[.*?\]\(.*?\)/.test(block.content)) ? (
+                            <div
+                              onClick={() => {
+                                setActiveBlockId(block.id);
+                                setTimeout(() => textareaRefs.current.get(block.id)?.focus(), 10);
+                              }}
+                              className={`w-full cursor-text text-base text-slate-800 dark:text-slate-200 leading-relaxed overflow-hidden break-words whitespace-pre-wrap py-0.5 select-text ${
+                                typography === 'serif' ? 'font-serif' : 'font-sans'
+                              }`}
+                            >
+                              {renderFormattedText(block.content, openWikiLink)}
+                            </div>
+                          ) : (
+                            <textarea
+                              ref={el => el && textareaRefs.current.set(block.id, el)}
+                              value={block.content}
+                              onFocus={() => setActiveBlockId(block.id)}
+                              onChange={e => handleBlockTextChange(block.id, e.target.value)}
+                              onKeyDown={e => handleBlockKeyDown(e, block)}
+                              onKeyUp={e => handleBlockKeyUp(e, block)}
+                              rows={1}
+                              placeholder={!isFocused && block.content === '' ? "Start typing or press '/' for commands..." : ''}
+                              className={`w-full bg-transparent border-none outline-none resize-none text-base text-slate-800 dark:text-slate-200 leading-relaxed overflow-hidden break-words whitespace-pre-wrap placeholder:text-slate-400 dark:placeholder:text-slate-600 ${
+                                typography === 'serif' ? 'font-serif' : 'font-sans'
+                              }`}
+                            />
+                          )}
+
+                          {/* Wiki link chips in paragraph when active or focused */}
+                          {extractWikiLinks(block.content).length > 0 && isFocused && (
+                            <div className="flex flex-wrap gap-1.5 mt-1.5 select-none">
                               {extractWikiLinks(block.content).map((link, i) => (
                                 <button
                                   key={i}
+                                  type="button"
                                   onClick={e => {
                                     e.stopPropagation();
                                     openWikiLink(link);
                                   }}
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 text-[11px] text-[#0284c7] font-medium hover:underline"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 text-[11px] text-cyan-600 dark:text-cyan-400 font-medium font-mono hover:underline transition-colors"
+                                  title={`Open page [[${link}]]`}
                                 >
                                   <span>[[{link}]]</span>
-                                  <ArrowUpRight className="w-3 h-3" />
+                                  <ArrowUpRight className="w-3 h-3 text-cyan-500" />
                                 </button>
                               ))}
                             </div>
@@ -2088,7 +2235,7 @@ export const Editor: React.FC<EditorProps> = ({ pageId, isSecondaryPane }) => {
                     handleInsertBlockBelow(last?.id || '', 'p');
                   }
                 }}
-                className="flex-1 min-h-[160px] cursor-text py-8 text-xs text-slate-400 select-none flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
+                className="flex-1 min-h-[48px] cursor-text py-3 text-xs text-slate-400 select-none flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
               >
                 <span>Click here or press Enter to add a new line...</span>
               </div>

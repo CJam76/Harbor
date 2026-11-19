@@ -68,7 +68,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsSearchOpen,
     openDailyNote,
     setIsQuickCaptureOpen,
-    resetToSampleData,
     setIsTrashOpen,
     trashCount,
     toggleFavorite,
@@ -736,20 +735,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        {/* Footer info & sample data reset */}
-        <div className="p-3 border-t border-slate-200/80 dark:border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
-          <span>Harbor v1.0 • Offline Ready</span>
-          <button
-            onClick={() => {
-              if (window.confirm("Reload default starter spaces and templates? Any unsaved edits will be refreshed.")) {
-                resetToSampleData();
-              }
-            }}
-            className="hover:text-slate-700 dark:hover:text-slate-200 underline"
-            title="Reset workspace with starter templates"
-          >
-            Reset Starter
-          </button>
+        {/* Footer info - Permanent Local Vault */}
+        <div className="p-3 border-t border-slate-200/80 dark:border-slate-800 text-[11px] text-slate-400 flex items-center justify-between font-mono select-none">
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+            <span>Harbor v1.0 • Vault</span>
+          </span>
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider">Offline Ready</span>
         </div>
       </aside>
 

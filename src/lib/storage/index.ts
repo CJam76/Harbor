@@ -67,7 +67,7 @@ export interface IStorageAdapter {
   emptyTrash(): Promise<void>;
 
   exportWorkspace(): Promise<WorkspaceBackup>;
-  importWorkspace(backup: WorkspaceBackup): Promise<void>;
+  importWorkspace(backup: WorkspaceBackup, mode?: 'replace' | 'merge'): Promise<void>;
   clearWorkspace(): Promise<void>;
 }
 
@@ -315,16 +315,22 @@ class DexieStorageAdapter implements IStorageAdapter {
     };
   }
 
-  async importWorkspace(backup: WorkspaceBackup): Promise<void> {
+  async importWorkspace(backup: WorkspaceBackup, mode: 'replace' | 'merge' = 'replace'): Promise<void> {
     if (!backup.version || !Array.isArray(backup.spaces) || !Array.isArray(backup.pages)) {
       throw new Error("Invalid workspace backup file structure");
     }
 
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('harbor_vault_initialized', 'true');
+    }
+
     await this.db.transaction('rw', [this.db.spaces, this.db.pages, this.db.databases, this.db.canvases], async () => {
-      await this.db.spaces.clear();
-      await this.db.pages.clear();
-      await this.db.databases.clear();
-      await this.db.canvases.clear();
+      if (mode === 'replace') {
+        await this.db.spaces.clear();
+        await this.db.pages.clear();
+        await this.db.databases.clear();
+        await this.db.canvases.clear();
+      }
 
       await this.db.spaces.bulkPut(backup.spaces);
       await this.db.pages.bulkPut(backup.pages);

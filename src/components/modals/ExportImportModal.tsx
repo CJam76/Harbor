@@ -44,6 +44,7 @@ export const ExportImportModal: React.FC<ExportImportModalProps> = ({
   const [activeTab, setActiveTab] = useState<'export' | 'import' | 'vault'>('export');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [importMode, setImportMode] = useState<'replace' | 'merge'>('merge');
   const [selectedSpaceId, setSelectedSpaceId] = useState<string>(
     activeSpaceId || spaces[0]?.id || ''
   );
@@ -61,11 +62,11 @@ export const ExportImportModal: React.FC<ExportImportModalProps> = ({
     reader.onload = async event => {
       try {
         const text = event.target?.result as string;
-        await importWorkspaceJSON(text);
-        setStatusMessage('Workspace backup successfully restored!');
+        await importWorkspaceJSON(text, importMode);
+        setStatusMessage(importMode === 'replace' ? 'Workspace vault replaced from backup!' : 'Vault notes merged into current workspace!');
         setTimeout(() => onClose(), 1200);
       } catch (err: any) {
-        setStatusMessage(`Failed to import backup: ${err.message || 'Invalid format'}`);
+        setStatusMessage(`Failed to import vault: ${err.message || 'Invalid format'}`);
       }
     };
     reader.readAsText(file);
@@ -198,22 +199,22 @@ export const ExportImportModal: React.FC<ExportImportModalProps> = ({
 
           {activeTab === 'export' && (
             <div className="space-y-4">
-              {/* Full Workspace JSON */}
+              {/* Full Workspace Vault Export */}
               <div className="p-4 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 flex items-center justify-between">
                 <div>
                   <div className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                     <FileCode className="w-4 h-4 text-[#0284c7]" />
-                    <span>Full Workspace Backup (JSON)</span>
+                    <span>Full Vault Backup (.harbor / JSON)</span>
                   </div>
                   <div className="text-[11px] text-slate-500 mt-1">
-                    Complete dump of all {spaces.length} spaces, {pages.length} pages, and {databases.length} databases.
+                    Portable archive of all {spaces.length} spaces, {pages.length} pages, and {databases.length} databases. Cross-platform compatible with Windows, Linux, and macOS.
                   </div>
                 </div>
                 <button
                   onClick={exportWorkspaceJSON}
                   className="px-3 py-1.5 bg-[#080c14] dark:bg-white text-white dark:text-[#080c14] font-medium hover:bg-slate-800 dark:hover:bg-slate-200 rounded-none transition-colors"
                 >
-                  Export JSON
+                  Export Vault
                 </button>
               </div>
 
@@ -263,18 +264,44 @@ export const ExportImportModal: React.FC<ExportImportModalProps> = ({
 
           {activeTab === 'import' && (
             <div className="space-y-4">
-              {/* Restore JSON */}
-              <div className="p-4 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
-                <div className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-1">
+              {/* Restore / Import Vault */}
+              <div className="p-4 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 space-y-3">
+                <div className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                   <Upload className="w-4 h-4 text-[#0284c7]" />
-                  <span>Restore Workspace from Backup</span>
+                  <span>Import Vault from Machine Backup</span>
                 </div>
-                <p className="text-[11px] text-slate-500 mb-3">
-                  Upload a previously exported Harbor JSON backup file. (Replaces current local database).
+                <p className="text-[11px] text-slate-500">
+                  Load a <code>.harbor</code> or JSON backup file exported from another machine or workspace.
                 </p>
+
+                <div className="flex items-center gap-3 py-1 text-xs">
+                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-slate-300">
+                    <input
+                      type="radio"
+                      name="importMode"
+                      value="merge"
+                      checked={importMode === 'merge'}
+                      onChange={() => setImportMode('merge')}
+                      className="accent-[#0284c7]"
+                    />
+                    <span>Merge into current vault</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-slate-300">
+                    <input
+                      type="radio"
+                      name="importMode"
+                      value="replace"
+                      checked={importMode === 'replace'}
+                      onChange={() => setImportMode('replace')}
+                      className="accent-[#0284c7]"
+                    />
+                    <span className="text-rose-600 dark:text-rose-400">Replace current vault</span>
+                  </label>
+                </div>
+
                 <input
                   type="file"
-                  accept=".json"
+                  accept=".json,.harbor"
                   ref={jsonFileInputRef}
                   onChange={handleJsonUpload}
                   className="hidden"
@@ -283,7 +310,7 @@ export const ExportImportModal: React.FC<ExportImportModalProps> = ({
                   onClick={() => jsonFileInputRef.current?.click()}
                   className="px-3 py-1.5 bg-[#080c14] dark:bg-white text-white dark:text-[#080c14] font-medium hover:bg-slate-800 dark:hover:bg-slate-200 rounded-none transition-colors"
                 >
-                  Choose JSON Backup File
+                  Choose Vault Backup (.harbor / .json)
                 </button>
               </div>
 

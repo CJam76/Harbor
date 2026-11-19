@@ -144,7 +144,7 @@ interface WorkspaceContextType {
 
   // Import / Export & Local Folder Sync
   exportWorkspaceJSON: () => Promise<void>;
-  importWorkspaceJSON: (jsonData: string) => Promise<void>;
+  importWorkspaceJSON: (jsonData: string, mode?: 'replace' | 'merge') => Promise<void>;
   exportPageMarkdown: (pageId: string) => void;
   exportDatabaseCSV: (databaseId: string) => void;
   importMarkdownFile: (spaceId: string, filename: string, markdownContent: string) => Promise<string>;
@@ -764,7 +764,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     content = ''
   ): Promise<string> => {
     const newId = `page-${Date.now()}`;
-    const defaultMarkdown = content || `# ${title}\n\nStart typing or press \`/\` for commands...`;
+    const defaultMarkdown = content !== '' ? content : (title ? `# ${title}\n\n` : '');
     const newPage: Page = {
       id: newId,
       spaceId,
@@ -1046,6 +1046,37 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           ]
         },
         { id: 'col-rating', name: 'Rating (1-5)', type: 'number', width: 120 },
+      ];
+    } else if (template === 'projects') {
+      columns = [
+        { id: 'col-project', name: 'Project / Initiative', type: 'text', width: 260 },
+        {
+          id: 'col-status',
+          name: 'Status',
+          type: 'status',
+          width: 140,
+          options: [
+            { id: 'st-plan', label: 'Planning', color: 'slate' },
+            { id: 'st-active', label: 'In Execution', color: 'blue' },
+            { id: 'st-review', label: 'Review', color: 'amber' },
+            { id: 'st-comp', label: 'Completed', color: 'emerald' },
+          ]
+        },
+        {
+          id: 'col-priority',
+          name: 'Priority',
+          type: 'select',
+          width: 130,
+          options: [
+            { id: 'p-p0', label: 'P0 - Blocker', color: 'rose' },
+            { id: 'p-p1', label: 'P1 - High', color: 'amber' },
+            { id: 'p-p2', label: 'P2 - Medium', color: 'blue' },
+            { id: 'p-p3', label: 'P3 - Low', color: 'slate' },
+          ]
+        },
+        { id: 'col-owner', name: 'Lead / Owner', type: 'text', width: 140 },
+        { id: 'col-target', name: 'Target Date', type: 'date', width: 140 },
+        { id: 'col-milestone', name: 'Milestone Met', type: 'checkbox', width: 110 },
       ];
     }
 
@@ -1442,15 +1473,15 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backup, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `harbor-workspace-backup-${new Date().toISOString().split('T')[0]}.json`);
+    downloadAnchor.setAttribute('download', `harbor-vault-${new Date().toISOString().split('T')[0]}.harbor.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
   }, []);
 
-  const importWorkspaceJSON = useCallback(async (jsonData: string) => {
+  const importWorkspaceJSON = useCallback(async (jsonData: string, mode: 'replace' | 'merge' = 'replace') => {
     const backup: WorkspaceBackup = JSON.parse(jsonData);
-    await storage.importWorkspace(backup);
+    await storage.importWorkspace(backup, mode);
     await loadWorkspaceData();
     navigateToHome();
   }, [loadWorkspaceData, navigateToHome]);
@@ -1548,6 +1579,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [connectedDirectoryHandle]);
 
   const resetToSampleData = useCallback(async () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('harbor_vault_initialized');
+    }
     await storage.clearWorkspace();
     await seedInitialDataIfNeeded(storage);
     await loadWorkspaceData();

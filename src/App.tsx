@@ -82,8 +82,8 @@ const WorkspaceShell: React.FC = () => {
         e.preventDefault();
         closeTab(activeTabId);
       }
-      // Ctrl+T: New Note
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 't') {
+      // Ctrl+N or Ctrl+T: New Note
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key.toLowerCase() === 't' || e.key.toLowerCase() === 'n')) {
         e.preventDefault();
         const spaceId = activeSpaceId || (spaces[0] ? spaces[0].id : 'default');
         createPage(spaceId, null, 'Untitled Note');

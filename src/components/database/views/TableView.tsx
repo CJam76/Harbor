@@ -22,6 +22,24 @@ interface TableViewProps {
   onAddColumn: () => void;
 }
 
+const getDateStatus = (dateStr: string) => {
+  if (!dateStr) return null;
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(dateStr);
+    target.setHours(0, 0, 0, 0);
+    const diffTime = target.getTime() - today.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return { label: 'Overdue', color: 'text-rose-500 bg-rose-500/10 border-rose-500/25' };
+    if (diffDays === 0) return { label: 'Today', color: 'text-cyan-500 bg-cyan-500/10 border-cyan-500/25' };
+    if (diffDays === 1) return { label: 'Tomorrow', color: 'text-amber-500 bg-amber-500/10 border-amber-500/25' };
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 export const TableView: React.FC<TableViewProps> = ({
   database,
   rows,
@@ -270,12 +288,23 @@ export const TableView: React.FC<TableViewProps> = ({
 
                       {/* Date */}
                       {col.type === 'date' && (
-                        <input
-                          type="date"
-                          value={val ?? ''}
-                          onChange={e => handleCellChange(row, col.id, e.target.value)}
-                          className="w-full bg-transparent border-none outline-none focus:bg-white dark:focus:bg-slate-950 focus:ring-1 focus:ring-[#0284c7] px-1 py-0.5 rounded-none text-xs font-mono"
-                        />
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="date"
+                            value={val ?? ''}
+                            onChange={e => handleCellChange(row, col.id, e.target.value)}
+                            className="w-full bg-transparent border-none outline-none focus:bg-white dark:focus:bg-slate-950 focus:ring-1 focus:ring-[#0284c7] px-1 py-0.5 rounded-none text-xs font-mono"
+                          />
+                          {val && getDateStatus(String(val)) && (
+                            <span
+                              className={`px-1 py-0.2 border text-[9px] font-semibold uppercase tracking-wider rounded-[2px] whitespace-nowrap ${
+                                getDateStatus(String(val))!.color
+                              }`}
+                            >
+                              {getDateStatus(String(val))!.label}
+                            </span>
+                          )}
+                        </div>
                       )}
 
                       {/* URL */}

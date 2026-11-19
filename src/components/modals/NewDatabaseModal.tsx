@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Database as DbIcon, CheckSquare, BookOpen, Layers, Check } from 'lucide-react';
+import { X, Database as DbIcon, CheckSquare, BookOpen, Layers, Check, Target } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
 
 interface NewDatabaseModalProps {
@@ -34,6 +34,12 @@ export const NewDatabaseModal: React.FC<NewDatabaseModalProps> = ({
       title: 'Tasks & Sprints',
       desc: 'Task, Status, Priority, Due Date, and Verified Checkbox',
       icon: CheckSquare,
+    },
+    {
+      id: 'projects' as const,
+      title: 'Projects & Initiatives',
+      desc: 'Initiative, Status Pipeline, Priority, Owner, and Target Milestone',
+      icon: Target,
     },
     {
       id: 'assignments' as const,

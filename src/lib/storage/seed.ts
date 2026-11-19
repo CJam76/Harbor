@@ -646,6 +646,12 @@ export const INITIAL_CANVASES: Canvas[] = [
 ];
 
 export async function seedInitialDataIfNeeded(storageInstance: any) {
+  // Permanence check: if vault has ever been initialized or customized, never re-seed automatically
+  const isInitialized = typeof window !== 'undefined' && localStorage.getItem('harbor_vault_initialized');
+  if (isInitialized) {
+    return false;
+  }
+
   const existingSpaces = await storageInstance.getSpaces();
   if (existingSpaces.length === 0) {
     for (const space of INITIAL_SPACES) {
@@ -660,7 +666,14 @@ export async function seedInitialDataIfNeeded(storageInstance: any) {
     for (const canvas of INITIAL_CANVASES) {
       await storageInstance.saveCanvas(canvas);
     }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('harbor_vault_initialized', 'true');
+    }
     return true;
+  }
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('harbor_vault_initialized', 'true');
   }
 
   // Also seed initial canvases if table is newly added
